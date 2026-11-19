@@ -1,0 +1,388 @@
+openapi: 3.1.0
+info:
+  title: ALIR Portal Master service
+  version: 0.1.0
+  description: >
+    Masters of Portal Master. Every request is checked against the caller's access on the master's menu
+    (may(user, menu, action), ALIR docs/auth-api.md). Until the Authentication service issues tokens the
+    service acts as PM_DEFAULT_USER with full access. Every response carries X-Request-ID.
+servers:
+  - url: http://localhost:8081
+paths:
+  /healthz:
+    get: { summary: Process is up, responses: { '200': { description: ok } } }
+  /readyz:
+    get: { summary: Database reachable, responses: { '200': { description: ready }, '503': { description: database unavailable } } }
+  /pm/masters/levels:
+    get:
+      summary: List organization levels, by rank (pm.orgLevel read)
+      responses:
+        '200': { description: Levels, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Level' } } } } }
+    post:
+      summary: Add a level (pm.orgLevel create)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LevelInput' } } } }
+      responses:
+        '201': { description: Stored level, content: { application/json: { schema: { $ref: '#/components/schemas/Level' } } } }
+        '422': { $ref: '#/components/responses/Validation' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { description: 'NO_PREFIX: no active row in pm.code_prefix for org_level', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /pm/masters/levels/upload:
+    post:
+      summary: CSV import (pm.orgLevel upload); not available yet
+      responses: { '501': { $ref: '#/components/responses/Error' } }
+  /pm/masters/levels/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get:
+      summary: One level
+      responses:
+        '200': { description: Level, content: { application/json: { schema: { $ref: '#/components/schemas/Level' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+    put:
+      summary: Change a level (pm.orgLevel update). Fields sent replace the stored ones; `code` is fixed.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LevelInput' } } } }
+      responses:
+        '200': { description: Stored level, content: { application/json: { schema: { $ref: '#/components/schemas/Level' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { description: 'STALE: version differs from the stored one; nothing written', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/Validation' }
+    delete:
+      summary: Soft-delete a level (pm.orgLevel delete); its code stays taken. Built-in levels (group, region, wilayah, company, unit) answer 409.
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /pm/masters/unit-types:
+    get:
+      summary: List unit types, by code (pm.unitType read)
+      responses:
+        '200': { description: Unit types, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitType' } } } } }
+    post:
+      summary: Add a unit type (pm.unitType create); the code is generated (MJU001, …)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UnitTypeInput' } } } }
+      responses:
+        '201': { description: Stored unit type, content: { application/json: { schema: { $ref: '#/components/schemas/UnitType' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { description: 'NO_PREFIX: no active row in pm.code_prefix for unit_type', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/Validation' }
+  /pm/masters/unit-types/upload:
+    post:
+      summary: CSV import (pm.unitType upload); not available yet
+      responses: { '501': { $ref: '#/components/responses/Error' } }
+  /pm/masters/unit-types/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get:
+      summary: One unit type
+      responses:
+        '200': { description: Unit type, content: { application/json: { schema: { $ref: '#/components/schemas/UnitType' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+    put:
+      summary: Change a unit type (pm.unitType update). Fields sent replace the stored ones; `code` is fixed.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UnitTypeInput' } } } }
+      responses:
+        '200': { description: Stored unit type, content: { application/json: { schema: { $ref: '#/components/schemas/UnitType' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { description: 'STALE: version differs from the stored one; nothing written', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/Validation' }
+    delete:
+      summary: Soft-delete a unit type (pm.unitType delete); its code stays taken. 409 while units use it.
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /pm/masters/org-units:
+    get:
+      summary: List organization units, by code (pm.orgUnit read)
+      responses:
+        '200': { description: Units, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/OrgUnit' } } } } }
+    post:
+      summary: Add a unit (pm.orgUnit create); the code is generated (MUO001, …)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/OrgUnitInput' } } } }
+      responses:
+        '201': { description: Stored unit, content: { application/json: { schema: { $ref: '#/components/schemas/OrgUnit' } } } }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { description: 'NO_PREFIX: no active row in pm.code_prefix for org_unit', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/Validation' }
+  /pm/masters/org-units/upload:
+    post:
+      summary: CSV import (pm.orgUnit upload); not available yet
+      responses: { '501': { $ref: '#/components/responses/Error' } }
+  /pm/masters/org-units/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get:
+      summary: One unit
+      responses:
+        '200': { description: Unit, content: { application/json: { schema: { $ref: '#/components/schemas/OrgUnit' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+    put:
+      summary: Change a unit (pm.orgUnit update); also moves it (parentCode) or changes its level or type. `code` is fixed.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/OrgUnitInput' } } } }
+      responses:
+        '200': { description: Stored unit, content: { application/json: { schema: { $ref: '#/components/schemas/OrgUnit' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { description: 'STALE: version differs from the stored one; nothing written', content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/Validation' }
+    delete:
+      summary: Soft-delete a unit (pm.orgUnit delete); its code stays taken. 409 while units hang under it.
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /pm/masters/grades:
+    get: { summary: 'List Grade Jabatan (pm.grade read)', responses: { '200': { description: Records, standard fields first } } }
+    post:
+      summary: 'Add (pm.grade create); code generated. Body: standard fields and rank (1.., unique among live)'
+      responses: { '201': { description: Stored }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } }
+  /pm/masters/grades/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get: { summary: One record, responses: { '200': { description: Record }, '404': { $ref: '#/components/responses/Error' } } }
+    put: { summary: 'Change; fields sent replace the stored ones (version: 409 STALE)', responses: { '200': { description: Stored }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } } }
+    delete: { summary: 'Soft delete; 409 IN_USE while used', responses: { '204': { description: Deleted }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } } }
+  /pm/masters/jabatan:
+    get: { summary: 'List Jabatan (pm.jabatan read)', responses: { '200': { description: Records, standard fields first } } }
+    post:
+      summary: 'Add (pm.jabatan create); code generated. Body: standard fields and gradeCode, kind (struktural|fungsional), levelCode'
+      responses: { '201': { description: Stored }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } }
+  /pm/masters/jabatan/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get: { summary: One record, responses: { '200': { description: Record }, '404': { $ref: '#/components/responses/Error' } } }
+    put: { summary: 'Change; fields sent replace the stored ones (version: 409 STALE)', responses: { '200': { description: Stored }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } } }
+    delete: { summary: 'Soft delete; 409 IN_USE while used', responses: { '204': { description: Deleted }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } } }
+  /pm/masters/positions:
+    get: { summary: 'List Posisi (pm.position read)', responses: { '200': { description: Records, standard fields first } } }
+    post:
+      summary: 'Add (pm.position create); code generated. Body: standard fields and unitCode, jabatanCode (fixed after create), reportsToCode, head, holderEmployeeCode, actingEmployeeCode, name optional (made from jabatan · unit)'
+      responses: { '201': { description: Stored }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } }
+  /pm/masters/positions/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get: { summary: One record, responses: { '200': { description: Record }, '404': { $ref: '#/components/responses/Error' } } }
+    put: { summary: 'Change; fields sent replace the stored ones (version: 409 STALE)', responses: { '200': { description: Stored }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } } }
+    delete: { summary: 'Soft delete; 409 IN_USE while used', responses: { '204': { description: Deleted }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } } }
+  /pm/masters/approval-rules:
+    get: { summary: 'List Aturan Approval (pm.approvalRule read)', responses: { '200': { description: Records, standard fields first } } }
+    post:
+      summary: 'Add (pm.approvalRule create); code generated. Body: standard fields and sop, module, minSteps, reach {kind: steps|level|amount, steps, level, bands [{max, level}]}; problems as reach.kind, reach.steps, reach.level, reach.bands'
+      responses: { '201': { description: Stored }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } }
+  /pm/masters/approval-rules/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get: { summary: One record, responses: { '200': { description: Record }, '404': { $ref: '#/components/responses/Error' } } }
+    put: { summary: 'Change; fields sent replace the stored ones (version: 409 STALE)', responses: { '200': { description: Stored }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } } }
+    delete: { summary: 'Soft delete; 409 IN_USE while used', responses: { '204': { description: Deleted }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } } }
+  /pm/masters/delegations:
+    get: { summary: 'List Delegasi (pm.delegation read)', responses: { '200': { description: Records, standard fields first } } }
+    post:
+      summary: 'Add (pm.delegation create); code generated. Body: standard fields and name (the reason), validFrom/validTo (required), positionCode, delegateEmployeeCode (required), ruleCodes (empty = every type)'
+      responses: { '201': { description: Stored }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } }
+  /pm/masters/delegations/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get: { summary: One record, responses: { '200': { description: Record }, '404': { $ref: '#/components/responses/Error' } } }
+    put: { summary: 'Change; fields sent replace the stored ones (version: 409 STALE)', responses: { '200': { description: Stored }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } } }
+    delete: { summary: 'Soft delete; 409 IN_USE while used', responses: { '204': { description: Deleted }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } } }
+  /pm/masters/custom-flows:
+    get: { summary: 'List Approval Custom (pm.approvalFlow read)', responses: { '200': { description: Records, standard fields first } } }
+    post:
+      summary: 'Add (pm.approvalFlow create); code generated. Body: standard fields and sop, ruleCode, scopeUnitCode, stepCodes (1..20, in order, no repeats)'
+      responses: { '201': { description: Stored }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } }
+  /pm/masters/custom-flows/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get: { summary: One record, responses: { '200': { description: Record }, '404': { $ref: '#/components/responses/Error' } } }
+    put: { summary: 'Change; fields sent replace the stored ones (version: 409 STALE)', responses: { '200': { description: Stored }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } } }
+    delete: { summary: 'Soft delete; 409 IN_USE while used', responses: { '204': { description: Deleted }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } } }
+  /pm/masters/employees:
+    get: { summary: 'List Karyawan (pm.employee read)', responses: { '200': { description: Records, standard fields first } } }
+    post:
+      summary: 'Add (pm.employee create); code generated. Body: standard fields and name (full name), nik (one live per NIK), joinDate, employmentStatusCode (required), educationLevelCode, workShiftCode, bankCode'
+      responses: { '201': { description: Stored }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } }
+  /pm/masters/employees/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get: { summary: One record, responses: { '200': { description: Record }, '404': { $ref: '#/components/responses/Error' } } }
+    put: { summary: 'Change (version: 409 STALE)', responses: { '200': { description: Stored }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } } }
+    delete: { summary: 'Soft delete; 409 IN_USE while used', responses: { '204': { description: Deleted }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } } }
+  /pm/masters/employment-status:
+    get: { summary: 'List Status Kepegawaian (pm.employmentStatus read)', responses: { '200': { description: Records, standard fields first } } }
+    post:
+      summary: 'Add (pm.employmentStatus create); code generated. Body: standard fields and permanent, contractMonths (0..120; 0 when permanent)'
+      responses: { '201': { description: Stored }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } }
+  /pm/masters/employment-status/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get: { summary: One record, responses: { '200': { description: Record }, '404': { $ref: '#/components/responses/Error' } } }
+    put: { summary: 'Change (version: 409 STALE)', responses: { '200': { description: Stored }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } } }
+    delete: { summary: 'Soft delete; 409 IN_USE while used', responses: { '204': { description: Deleted }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } } }
+  /pm/masters/education-levels:
+    get: { summary: 'List Jenjang Pendidikan (pm.education read)', responses: { '200': { description: Records, standard fields first } } }
+    post:
+      summary: 'Add (pm.education create); code generated. Body: standard fields and rank (unique among live)'
+      responses: { '201': { description: Stored }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } }
+  /pm/masters/education-levels/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get: { summary: One record, responses: { '200': { description: Record }, '404': { $ref: '#/components/responses/Error' } } }
+    put: { summary: 'Change (version: 409 STALE)', responses: { '200': { description: Stored }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } } }
+    delete: { summary: 'Soft delete; 409 IN_USE while used', responses: { '204': { description: Deleted }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } } }
+  /pm/masters/work-shifts:
+    get: { summary: 'List Shift Kerja (pm.workShift read)', responses: { '200': { description: Records, standard fields first } } }
+    post:
+      summary: 'Add (pm.workShift create); code generated. Body: standard fields and start, end (HH:MM), night (required when end is not after start)'
+      responses: { '201': { description: Stored }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } }
+  /pm/masters/work-shifts/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get: { summary: One record, responses: { '200': { description: Record }, '404': { $ref: '#/components/responses/Error' } } }
+    put: { summary: 'Change (version: 409 STALE)', responses: { '200': { description: Stored }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } } }
+    delete: { summary: 'Soft delete; 409 IN_USE while used', responses: { '204': { description: Deleted }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } } }
+  /pm/masters/banks:
+    get: { summary: 'List Bank (pm.bank read)', responses: { '200': { description: Records, standard fields first } } }
+    post:
+      summary: 'Add (pm.bank create); code generated. Body: standard fields and clearing (3–7 digits)'
+      responses: { '201': { description: Stored }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } }
+  /pm/masters/banks/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string }, description: Any case }
+    get: { summary: One record, responses: { '200': { description: Record }, '404': { $ref: '#/components/responses/Error' } } }
+    put: { summary: 'Change (version: 409 STALE)', responses: { '200': { description: Stored }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' }, '422': { $ref: '#/components/responses/Validation' } } }
+    delete: { summary: 'Soft delete; 409 IN_USE while used', responses: { '204': { description: Deleted }, '404': { $ref: '#/components/responses/Error' }, '409': { $ref: '#/components/responses/Error' } } }
+components:
+  schemas:
+    OrgUnitInput:
+      type: object
+      description: >
+        Standard fields, then the unit's own; relations by code (any case). `code` is generated on create (MUO001, …)
+        and fixed; workflow fields are ignored. Rules: the parent is a unit on the level just above (none at the
+        top); unitTypeCode is required at the Unit Operasional level and refused elsewhere; a new level, parent or
+        type must be active; the level cannot change while units hang under the unit.
+      properties:
+        name: { type: string, maxLength: 150 }
+        description: { type: [string, 'null'], maxLength: 500 }
+        active: { type: boolean, default: true }
+        validFrom: { type: [string, 'null'], format: date }
+        validTo: { type: [string, 'null'], format: date }
+        levelCode: { type: string, maxLength: 40 }
+        parentCode: { type: [string, 'null'], maxLength: 40 }
+        unitTypeCode: { type: [string, 'null'], maxLength: 40 }
+        location: { type: [string, 'null'], maxLength: 80 }
+        version: { type: integer, minimum: 1, description: 'PUT only, optional (409 STALE when it differs)' }
+    OrgUnit:
+      type: object
+      description: The standard fields (as Level, without rank), then the unit's own; every relation by id and code.
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, description: 'Generated (MUO001, …); sample units keep their codes' }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        active: { type: boolean }
+        state: { type: [string, 'null'] }
+        status: { type: [string, 'null'] }
+        remark: { type: [string, 'null'] }
+        approvalLevelRequired: { type: [integer, 'null'] }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        approvedBy: { type: [string, 'null'], format: uuid }
+        validFrom: { type: [string, 'null'], format: date }
+        validTo: { type: [string, 'null'], format: date }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string, format: uuid }
+        updatedAt: { type: [string, 'null'], format: date-time }
+        updatedBy: { type: [string, 'null'], format: uuid }
+        version: { type: integer }
+        levelId: { type: string, format: uuid }
+        levelCode: { type: string }
+        parentId: { type: [string, 'null'], format: uuid }
+        parentCode: { type: [string, 'null'] }
+        unitTypeId: { type: [string, 'null'], format: uuid }
+        unitTypeCode: { type: [string, 'null'] }
+        location: { type: [string, 'null'] }
+    UnitTypeInput:
+      type: object
+      description: >
+        Standard fields only. `code` is generated on create (MJU001, …) and fixed; workflow fields and the head job
+        title (headJabatan, headJabatanId) are ignored until the Jabatan master is served here.
+      properties:
+        name: { type: string, maxLength: 150 }
+        description: { type: [string, 'null'], maxLength: 500 }
+        active: { type: boolean, default: true }
+        validFrom: { type: [string, 'null'], format: date }
+        validTo: { type: [string, 'null'], format: date, description: 'Inclusive; not before validFrom' }
+        version: { type: integer, minimum: 1, description: 'PUT only, optional: the version the change was read at (409 STALE when it differs)' }
+    UnitType:
+      type: object
+      description: The standard fields (as Level, without rank) and the head job title.
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, description: 'Generated (MJU001, …); the seeded types keep EST, PKS, PLS, BLK, KTR' }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        active: { type: boolean }
+        state: { type: [string, 'null'] }
+        status: { type: [string, 'null'] }
+        remark: { type: [string, 'null'] }
+        approvalLevelRequired: { type: [integer, 'null'] }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        approvedBy: { type: [string, 'null'], format: uuid }
+        validFrom: { type: [string, 'null'], format: date }
+        validTo: { type: [string, 'null'], format: date }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string, format: uuid }
+        updatedAt: { type: [string, 'null'], format: date-time }
+        updatedBy: { type: [string, 'null'], format: uuid }
+        version: { type: integer }
+        headJabatanId: { type: [string, 'null'], format: uuid }
+        headJabatanCode: { type: [string, 'null'], description: 'Head job title (Jabatan)' }
+    LevelInput:
+      type: object
+      description: >
+        Standard fields first, then the page's own. `code` is ignored: the service generates it on create
+        (pm.code_prefix, e.g. ML001) and it never changes. Workflow fields are ignored (set by the approval flow).
+      properties:
+        name: { type: string, maxLength: 150 }
+        description: { type: [string, 'null'], maxLength: 500 }
+        active: { type: boolean, default: true }
+        validFrom: { type: [string, 'null'], format: date }
+        validTo: { type: [string, 'null'], format: date, description: 'Inclusive; not before validFrom' }
+        rank: { description: 'Whole number 1..2147483647; 1 = top; one live level per rank. A numeric string is accepted.', oneOf: [{ type: integer }, { type: string }] }
+        version: { type: integer, minimum: 1, description: 'PUT only, optional: the version the change was read at (409 STALE when it differs)' }
+    Level:
+      type: object
+      description: Instants are RFC 3339 in UTC; user ids are UUIDs.
+      properties:
+        id: { type: string, format: uuid, description: UUIDv7 }
+        code: { type: string, description: 'Generated (ML001, …); the built-in levels keep group, region, wilayah, company, unit' }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        active: { type: boolean }
+        state: { type: [string, 'null'], description: Where the record is in its approval }
+        status: { type: [string, 'null'], description: 'Outcome: approved, void, cancelled, posted, …' }
+        remark: { type: [string, 'null'] }
+        approvalLevelRequired: { type: [integer, 'null'] }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        approvedBy: { type: [string, 'null'], format: uuid }
+        validFrom: { type: [string, 'null'], format: date }
+        validTo: { type: [string, 'null'], format: date }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string, format: uuid }
+        updatedAt: { type: [string, 'null'], format: date-time }
+        updatedBy: { type: [string, 'null'], format: uuid }
+        version: { type: integer, description: Raised on every change }
+        rank: { type: integer }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, examples: [VALIDATION, BAD_REQUEST, TOO_LARGE, NOT_FOUND, METHOD_NOT_ALLOWED, FORBIDDEN, IN_USE, STALE, CONFLICT, NO_IMPORT, NO_PREFIX] }
+        message: { type: string, description: Indonesian, shown to the user as is }
+        details: {}
+  responses:
+    Error:
+      description: Refused
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Validation:
+      description: 'Form problems: details.problems = [{field, message}]'
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

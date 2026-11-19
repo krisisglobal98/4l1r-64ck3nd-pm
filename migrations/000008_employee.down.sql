@@ -1,0 +1,13 @@
+DELETE FROM pm.code_prefix WHERE code IN ('employment_status', 'education_level', 'work_shift', 'bank', 'employee');
+DROP INDEX pm.idx_delegation_delegate;
+ALTER TABLE pm.delegation DROP CONSTRAINT delegation_delegate_fk;
+DROP INDEX pm.idx_position_holder;
+DROP INDEX pm.idx_position_acting;
+ALTER TABLE pm.position DROP CONSTRAINT position_holder_fk, DROP CONSTRAINT position_acting_fk, DROP CONSTRAINT position_acting_not_holder;
+UPDATE pm.position SET holder_employee_id = NULL, acting_employee_id = NULL;
+UPDATE pm.delegation SET delegate_employee_id = NULL;
+DROP TABLE pm.employee;
+DROP TABLE pm.bank;
+DROP TABLE pm.work_shift;
+DROP TABLE pm.education_level;
+DROP TABLE pm.employment_status;

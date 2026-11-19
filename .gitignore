@@ -1,0 +1,15 @@
+# Local settings and secrets (never commit: copy .env.example)
+.env
+.env.local
+
+# Builds and test output
+/bin/
+*.test
+*.out
+coverage.*
+
+# Editors and OS
+.DS_Store
+.vscode/
+.idea/
+*.log

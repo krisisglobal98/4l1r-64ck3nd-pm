@@ -1,0 +1,12 @@
+DELETE FROM pm.code_prefix WHERE code IN ('grade', 'jabatan', 'position', 'approval_rule', 'delegation', 'custom_flow');
+DROP TABLE pm.custom_flow_step;
+DROP TABLE pm.custom_flow;
+DROP TABLE pm.delegation_rule;
+DROP TABLE pm.delegation;
+DROP TABLE pm.approval_rule_band;
+DROP TABLE pm.approval_rule;
+DROP TABLE pm.position;
+UPDATE pm.unit_type SET head_jabatan_id = NULL;
+ALTER TABLE pm.unit_type DROP CONSTRAINT unit_type_head_jabatan_fk;
+DROP TABLE pm.jabatan;
+DROP TABLE pm.grade;

@@ -1,0 +1,191 @@
+# ALIR Portal Master service
+
+Backend of Portal Master for the ALIR frontend (`../ALIR`). Go 1.25, PostgreSQL, standard library HTTP.
+It serves every master of **Organisasi & Approval**: Level Organisasi, Jenis Unit Operasional, Unit Organisasi
+(Struktur organisasi), Grade Jabatan, Jabatan, Posisi (Jabatan & pejabat), Aturan Approval, Delegasi and Approval
+Custom (Alur approval); and Karyawan with the Employee Management masters it uses (Status Kepegawaian, Jenjang
+Pendidikan, Shift Kerja, Bank).
+The other masters still come from the frontend's sample data until they move here.
+
+```bash
+cp .env.example .env          # MIGRATE_DATABASE_URL (owner), DATABASE_URL (app role alir_pm_app), PM_APP_PASSWORD
+make db-roles                 # once per Postgres cluster: the application role alir_pm_app
+make migrate-up               # schema pm, built-in levels, code prefixes, then grants for alir_pm_app
+make seed-sample              # optional, development/demo only: the ALIR sample organization (seeds/sample_org.sql)
+make run                      # http://localhost:8081
+```
+
+In ALIR, set `VITE_PM_API_URL=/pm-api` in `.env` and run `npm run dev`. The Vite dev server proxies `/pm-api` here.
+
+Other commands: `make test` (unit tests), `make test-integration` (also Postgres, against `TEST_DATABASE_URL`;
+each test rolls back), `make test-e2e` (black-box suite over HTTP, below), `make build`, `make migrate-down`.
+
+## Multi-tenant (one installation, many companies)
+Every table has `tenant_id`; codes, NIK and emails are unique **per tenant**; generated codes are numbered per
+tenant. Postgres **Row-Level Security** (`tenant_isolation` policy on every table) keeps each company's rows to
+itself, so a missed filter in a query cannot leak another company's data:
+
+| Piece | How |
+|---|---|
+| Who the caller's company is | the `tid` claim of the Authentication token (required); `PM_AUTH_MODE=default-user` (dev/e2e) uses `PM_DEFAULT_TENANT_ID`, or an `X-Tenant-ID` header |
+| Per request | one connection, `set_config('app.tenant_id', tid)`; cleared when the connection goes back to the pool |
+| The service's database role | `alir_pm_app`: not the owner, not a superuser. **The service refuses to start** on a role that bypasses RLS |
+| Migrations, seeds | run as the owner (`MIGRATE_DATABASE_URL`); seeds set `app.tenant_id` themselves |
+| A new company | prepared on its first request: the 8 built-in levels and every code prefix (nothing else) |
+| Existing data | migration 000010 put every row in the first tenant, "Grup Agro Nusantara" (`00000000-0000-7000-8000-0000000000a1`) |
+
+## API
+Contract: `api/openapi.yaml`.
+
+| Method | Path | Answer |
+|---|---|---|
+| GET | `/pm/masters/levels` | levels by rank |
+| GET | `/pm/masters/levels/{code}` | one level (code in any case), 404 |
+| POST | `/pm/masters/levels` | 201 with the generated code; 422 `{details: {problems: [{field, message}]}}`; 409 `NO_PREFIX` |
+| PUT | `/pm/masters/levels/{code}` | 200; fields sent replace the stored ones, `code` stays; with `version`: 409 `STALE` when someone saved in between |
+| DELETE | `/pm/masters/levels/{code}` | 204, a soft delete; 409 for the built-in levels |
+| GET, POST | `/pm/masters/unit-types` | as levels (sorted by code; codes MJU001, …) |
+| GET, PUT, DELETE | `/pm/masters/unit-types/{code}` | as levels; DELETE 409 while units use the type |
+| GET, POST | `/pm/masters/org-units` | units with `levelCode`, `parentCode`, `unitTypeCode` (and their ids); codes MUO001, … |
+| GET, PUT, DELETE | `/pm/masters/org-units/{code}` | as levels; DELETE 409 while it is used |
+| GET, POST, GET/PUT/DELETE `/{code}` | `/pm/masters/grades`, `/jabatan`, `/positions`, `/approval-rules`, `/delegations`, `/custom-flows`, `/employees`, `/employment-status`, `/education-levels`, `/work-shifts`, `/banks` | the same contract; relations by code (`gradeCode`, `levelCode`, `unitCode`, `jabatanCode`, `reportsToCode`, `positionCode`, `ruleCodes`, `ruleCode`, `scopeUnitCode`, `stepCodes`) |
+| GET | `/healthz`, `/readyz` | process up; database reachable |
+
+Errors are `{code, message, details?}` with Indonesian messages, the shape the ALIR API client reads, also for an
+unknown address (404 `NOT_FOUND`), a wrong method (405 `METHOD_NOT_ALLOWED`), a body over 1 MiB (413 `TOO_LARGE`)
+and malformed JSON (400). A value the database refuses is a 400, never a 500. Every response
+carries `X-Request-ID`; a caller's id is kept and logged.
+
+## Layout (hexagonal, one folder per master)
+```
+cmd/pm-service/        wiring: config, database, routes, server
+internal/platform/     shared by every master
+  record/              standard columns of every master table and their checks
+  codeprefix/          generated codes from pm.code_prefix (ML001, …)
+  config/              .env and environment
+  database/            pgx pool; InTx puts the transaction in the context
+  httpx/               JSON, error body, request id, logging, recover
+  access/              who calls and may(user, menu, action)
+  apperr/              errors of the use cases (status, code, message)
+  outbox/              events written in the same transaction
+  master/              the shared use-case shell (codes, version, merge, soft delete with usage, events, routes)
+  refs/                lookups of related rows by code (locked for the save) and who uses a row (delete checks)
+internal/orglevel/      Level Organisasi (the pilot every master copies)
+  domain.go            Level and its rules (no database, no HTTP)
+  service.go           use cases and the ports they need (Repository, TxRunner, Codes, Events)
+  postgres.go          Repository on pm.org_level
+  http.go              routes
+internal/unittype/      Jenis Unit Operasional, same files on pm.unit_type
+internal/orgunit/       Unit Organisasi on pm.org_unit: the tree and its relations (levels, unit types, parent)
+internal/grade/ … customflow/  the other masters on the shared shell: one file each (Spec + Repo)
+seeds/                 sample data for development (make seed-sample), never run by migrations
+migrations/            golang-migrate
+test/e2e/              black-box suite: main_test.go (shared), one file per master
+```
+Dependencies point inward: `http.go` → `service.go` → `domain.go`. `postgres.go` implements the port that
+`service.go` declares.
+
+### Adding a master
+1. Add a migration for its table: the standard columns first (copy them from `000006`), then the page's own.
+   Add its row to `pm.code_prefix` (code = table name, prefix, digits). Lists of a record are detail tables with
+   `ON DELETE CASCADE`, replaced on save.
+2. Write `internal/<master>/<master>.go` on the shared shell, as `internal/grade` (the smallest) or
+   `internal/position` (relations): the record (`record.Base` + its own fields), `Parse`, `values`, a `Spec`
+   (`Check` resolves relations with `refs.Pick`) and a `repo`. Add who points to its rows to `usage` in
+   `internal/platform/refs`, so deletes are checked.
+   A relation to a master that is not in this service yet is a nullable `<name>_id uuid` column without a foreign
+   key, left NULL and not read from the body (see `unit_type.head_jabatan_id`); add the key when that master moves.
+3. Register it in `cmd/pm-service/main.go`.
+4. Copy `test/e2e/unit_types_test.go` for the master and add its table to `reset()` in `test/e2e/main_test.go`.
+5. In ALIR, add it to `PM_MASTERS` in `src/services/api/remoteApi.ts` (path and collection, plus `fromApi`/`toApi`/
+   `fields` when the page's model differs from the API, as `src/services/org/orgUnitApi.ts`); the structure answers
+   (`/pm/data`, `/org/structure`) then take its list from here. Give the form the standard fields (`auto` code,
+   description, validity, active) and mark relations not served yet with `pending`.
+
+## Standard columns of every master table
+Every master table starts with the same blocks. The columns of its own page come after them, in the table and in
+the JSON (see `migrations/000001_org_level.up.sql` and `internal/platform/record`):
+
+| Block | Columns | Set by |
+|---|---|---|
+| Primary key | `id uuid` (UUIDv7, `pm.uuid_v7()`) | database |
+| Master data | `code` (40, unique in any case), `name` (150), `description` (500) | code: service; rest: form |
+| Status | `is_active`, `is_deleted` | form / delete |
+| Workflow | `state` (where the record is in its approval), `status` (approved, void, cancelled, posted, …), `remark`, `approval_level_required`, `approved_at`, `approved_by` | approval flow, never the form |
+| Validity | `valid_from`, `valid_to` (dates, inclusive) | form |
+| Audit | `created_at/by`, `updated_at/by`, `deleted_at/by`, `version` | service |
+
+- **Ids and codes:** relations inside a service use `id`. A UUID is copied as is when data moves to another
+  database, so a migration keeps relations intact. `code` is the business key: unique, fixed once saved, and used
+  for import, export, integration and mapping data from legacy systems.
+- **Time:** every instant is `timestamptz`, an absolute moment stored in UTC and never in a regional zone. The pool
+  sets `timezone=UTC` on every session, every time comes from the database's `now()` (one clock for all instances),
+  and the API answers RFC 3339 in UTC (`…Z`). `valid_from`/`valid_to` are business dates and have no zone.
+- **User ids** in `*_by` are UUIDs from the Authentication service, with no foreign key across services. For now
+  the id is `PM_DEFAULT_USER_ID`. The seed rows use the system user `00000000-0000-7000-8000-000000000000`.
+- **Codes are generated**, never typed: prefix + next number from the master's row in `pm.code_prefix`, padded to
+  `digits` (`org_level` → `ML001`). The number is taken inside the save transaction; the row lock keeps parallel
+  saves apart and a failed save gives its number back. A number whose code is already taken is skipped. The table
+  is the setup data of the future master *Prefix Kode Master*. The five built-in levels keep their codes (`group`,
+  …, `unit`) because the frontend and Authentication refer to them by name.
+- **Delete is soft:** the row is marked deleted and inactive and leaves every answer. Its code stays taken, because
+  other masters refer to a level by its code.
+
+## Rules worth knowing
+- **Access:** every use case calls `access.Require(ctx, menu, action)`. The caller comes from the access token of
+  the Authentication service (`PM_AUTH_MODE=jwt`, the default): EdDSA signature by a key of its JWKS
+  (`PM_AUTH_JWKS_URL`), issuer `PM_AUTH_ISSUER`, audience `alir`, expiry; the grants travel in the token. No token:
+  401 `SIGNED_OUT`; expired: 401 `TOKEN_EXPIRED` (ALIR refreshes and repeats); a missing grant: 403.
+  `PM_AUTH_MODE=default-user` gives every request `PM_DEFAULT_USER` with full access: development and `make test-e2e`
+  only.
+- **Events:** every create, update or delete writes `pm.org_level.created|updated|deleted` (with the record id, code
+  and actor id) to `pm.outbox` in the same
+  transaction. No relay publishes them yet; it comes with the event bus (Authentication's copy of the org structure
+  will subscribe).
+- **Built-in levels** (`group`, `region`, `wilayah`, `company`, `unit`) cannot be deleted while units and job titles
+  live outside this service. Their names and ranks can change.
+- **Seeded unit types** (`EST`, `PKS`, `PLS`, `BLK`, `KTR`) keep their codes (the sample units use them).
+- **Usage is checked, not assumed:** a unit type or level used by a live unit cannot be deleted (409, deactivate it
+  instead), and a level in use keeps its rank. A unit with units under it cannot be deleted.
+- **The tree (Unit Organisasi):** relations are foreign keys by id; the API names them by code (`levelCode`,
+  `parentCode`, `unitTypeCode`) and answers both. The parent is a unit on the level just above (the next lower
+  rank; none at the top), the unit type is required at the Unit Operasional level and refused elsewhere, a unit's
+  level cannot change while units hang under it, and it cannot sit under itself. A new choice of level, parent or
+  type must be active; an existing one may stay after it is deactivated. The level, parent and type read for a
+  save are locked (`FOR SHARE`) until it commits, so they cannot be deleted under it.
+- **Racing saves:** a transaction Postgres aborts for a deadlock or a serialization conflict is run again (up to 4
+  times) by `database.InTx`; a unique index that refuses a racing save answers 409 `CONFLICT`. Masters whose rows
+  lock each other in both directions (Posisi: A reports to B while B reports to A) set `Spec.Serialize`: every write
+  takes one advisory lock first, one fixed order instead of row locks that deadlock.
+- **Jabatan & pejabat:** one live grade per rank; a position's job title is at its unit's level; unit and job title
+  are fixed once the position exists; one head per unit; the reporting line has no loop; an empty name becomes
+  "<jabatan> · <unit>". A job title used by positions keeps its level.
+- **Alur approval:** the reach is `steps`, `level` or `amount` bands (rising amounts, the same or a higher level,
+  an open band only last); a delegation needs a period; one custom flow per document type and branch, steps in
+  order without repeats.
+- **Organisation levels 1–3** (`org1`–`org3`, built in, ranks 6–8) are generic levels under the operational
+  unit; a company renames them (a plantation: Rayon, Afdeling, Blok). Their units are made in Unit Organisasi under
+  an operational unit; user scopes (Authentication) reach down to them.
+- **Karyawan:** one live employee per NIK; status kepegawaian required, education, shift and bank optional. A
+  position's holder and Plt and a delegation's delegate are employees (Plt never the holder; a delegate never the
+  holder of the position). Shift times are wall-clock HH:MM; a shift ending the next day is a night shift.
+- **Pending relations:** `unit_type.head_jabatan_id` stays NULL until the Jabatan master is served here; the API
+  answers `headJabatanId: null` and ignores the head job title the form may send.
+- **Codes** are unique in any case, deleted rows included (unique index on `lower(code)`), and looked up in any case.
+- **One live level per rank** (`org_level_rank_live`): rank orders the tree and "one level above" is rank − 1.
+  A deleted level frees its rank. To swap two ranks, move one to a free rank first.
+- **Lost updates:** a change may carry the `version` it was read at (ALIR sends it from the form and the list);
+  a different stored version answers 409 `STALE` and nothing is written. Without `version` the last save wins.
+- **Text** is trimmed (names), must be valid UTF-8 without NUL, and keeps its line breaks (descriptions).
+
+## Tests
+| Command | What | Database |
+|---|---|---|
+| `make test` | rules and use cases with an in-memory repository | none |
+| `make test-integration` | plus the Postgres repository, each test in a rolled-back transaction | `TEST_DATABASE_URL` |
+| `make test-e2e` | black-box over HTTP: positive (P), negative (N), stress (S) scenarios | `TEST_DATABASE_URL`, reset before and after |
+
+`test/e2e/levels_test.go` is the pilot suite for every master: copy it with the master. It starts the service in the
+Asia/Jakarta zone on purpose, and its stress part runs 300 parallel creates (codes unique and gap-free), 100 parallel
+updates of one record (none lost), deletes racing updates, parallel creates on one rank (exactly one wins), and
+3000 reads during writes (p95 under 500 ms; about 50 ms locally).
