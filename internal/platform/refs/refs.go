@@ -63,6 +63,7 @@ var usage = map[string][]user{
 		{"unit di bawahnya", `SELECT count(*) FROM pm.org_unit WHERE parent_id = $1 AND NOT is_deleted`},
 		{"posisi", `SELECT count(*) FROM pm.position WHERE org_unit_id = $1 AND NOT is_deleted`},
 		{"approval custom", `SELECT count(*) FROM pm.custom_flow WHERE scope_unit_id = $1 AND NOT is_deleted`},
+		{"tenaga penjualan", `SELECT count(*) FROM pm.sales_person WHERE org_unit_id = $1 AND NOT is_deleted`},
 	},
 	"grade": {
 		{"jabatan", `SELECT count(*) FROM pm.jabatan WHERE grade_id = $1 AND NOT is_deleted`},
@@ -80,16 +81,29 @@ var usage = map[string][]user{
 	"employment_status": {{"karyawan", `SELECT count(*) FROM pm.employee WHERE employment_status_id = $1 AND NOT is_deleted`}},
 	"education_level":   {{"karyawan", `SELECT count(*) FROM pm.employee WHERE education_level_id = $1 AND NOT is_deleted`}},
 	"work_shift":        {{"karyawan", `SELECT count(*) FROM pm.employee WHERE work_shift_id = $1 AND NOT is_deleted`}},
-	"bank":              {{"karyawan", `SELECT count(*) FROM pm.employee WHERE bank_id = $1 AND NOT is_deleted`}},
-	"currency":          {{"negara", `SELECT count(*) FROM pm.country WHERE currency_id = $1 AND NOT is_deleted`}},
+	"bank": {
+		{"karyawan", `SELECT count(*) FROM pm.employee WHERE bank_id = $1 AND NOT is_deleted`},
+		{"rekening mitra bisnis", `SELECT count(DISTINCT x.id) FROM pm.business_partner x JOIN pm.business_partner_bank_account a ON a.business_partner_id = x.id WHERE a.bank_id = $1 AND NOT x.is_deleted`},
+	},
+	"currency": {
+		{"negara", `SELECT count(*) FROM pm.country WHERE currency_id = $1 AND NOT is_deleted`},
+		{"mitra bisnis", `SELECT count(*) FROM pm.business_partner WHERE (customer_currency_id = $1 OR vendor_currency_id = $1) AND NOT is_deleted`},
+		{"rekening mitra bisnis", `SELECT count(DISTINCT x.id) FROM pm.business_partner x JOIN pm.business_partner_bank_account a ON a.business_partner_id = x.id WHERE a.currency_id = $1 AND NOT x.is_deleted`},
+	},
 	"country": {
 		{"kota", `SELECT count(*) FROM pm.city WHERE country_id = $1 AND NOT is_deleted`},
 		{"bank", `SELECT count(*) FROM pm.bank WHERE country_id = $1 AND NOT is_deleted`},
+		{"mitra bisnis", `SELECT count(*) FROM pm.business_partner WHERE country_id = $1 AND NOT is_deleted`},
 	},
+	"city":         {{"alamat mitra bisnis", `SELECT count(DISTINCT x.id) FROM pm.business_partner x JOIN pm.business_partner_address a ON a.business_partner_id = x.id WHERE a.city_id = $1 AND NOT x.is_deleted`}},
+	"payment_term": {{"mitra bisnis", `SELECT count(*) FROM pm.business_partner WHERE (customer_payment_term_id = $1 OR vendor_payment_term_id = $1) AND NOT is_deleted`}},
+	"tax_type":     {{"mitra bisnis", `SELECT count(*) FROM pm.business_partner WHERE vendor_tax_type_id = $1 AND NOT is_deleted`}},
+	"sales_person": {{"mitra bisnis", `SELECT count(*) FROM pm.business_partner WHERE sales_person_id = $1 AND NOT is_deleted`}},
 	"employee": {
 		{"posisi (pemegang)", `SELECT count(*) FROM pm.position WHERE holder_employee_id = $1 AND NOT is_deleted`},
 		{"posisi (Plt)", `SELECT count(*) FROM pm.position WHERE acting_employee_id = $1 AND NOT is_deleted`},
 		{"delegasi", `SELECT count(*) FROM pm.delegation WHERE delegate_employee_id = $1 AND NOT is_deleted`},
+		{"tenaga penjualan", `SELECT count(*) FROM pm.sales_person WHERE employee_id = $1 AND NOT is_deleted`},
 	},
 	"approval_rule": {
 		{"delegasi", `SELECT count(*) FROM pm.delegation d JOIN pm.delegation_rule x ON x.delegation_id = d.id

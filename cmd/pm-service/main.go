@@ -25,6 +25,7 @@ import (
 	"alir.local/pm-service/internal/jabatan"
 	"alir.local/pm-service/internal/orglevel"
 	"alir.local/pm-service/internal/orgunit"
+	"alir.local/pm-service/internal/partner"
 	"alir.local/pm-service/internal/paymentterm"
 	"alir.local/pm-service/internal/platform/access"
 	"alir.local/pm-service/internal/platform/codeprefix"
@@ -36,6 +37,7 @@ import (
 	"alir.local/pm-service/internal/platform/outbox"
 	"alir.local/pm-service/internal/platform/tenant"
 	"alir.local/pm-service/internal/position"
+	"alir.local/pm-service/internal/salesperson"
 	"alir.local/pm-service/internal/taxtype"
 	"alir.local/pm-service/internal/unittype"
 	"alir.local/pm-service/internal/workshift"
@@ -101,6 +103,9 @@ func run() error {
 	master.Routes(mux, "/pm/masters/cities", city.New(db))
 	master.Routes(mux, "/pm/masters/payment-terms", paymentterm.New(db))
 	master.Routes(mux, "/pm/masters/tax-types", taxtype.New(db))
+	// Mitra Bisnis
+	master.Routes(mux, "/pm/masters/sales-persons", salesperson.New(db))
+	master.Routes(mux, "/pm/masters/business-partners", partner.New(db))
 	master.Routes(mux, "/pm/masters/employees", employee.New(db))
 
 	// Who calls: the access token of the Authentication service; a default user only when chosen explicitly.

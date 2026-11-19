@@ -39,6 +39,7 @@ var Prefixes = []struct {
 	{"work_shift", "Shift Kerja", "MSF", 3}, {"bank", "Bank", "MBK", 3}, {"employee", "Karyawan", "MKY", 4},
 	{"currency", "Mata Uang", "MMU", 3}, {"country", "Negara", "MNG", 3}, {"city", "Kota", "MKT", 3},
 	{"payment_term", "Syarat Pembayaran", "MTP", 3}, {"tax_type", "Jenis Pajak", "MPJ", 3},
+	{"business_partner", "Mitra Bisnis", "MMB", 4}, {"sales_person", "Tenaga Penjualan", "MTJ", 3},
 }
 
 // Provisioner prepares each tenant once per process.

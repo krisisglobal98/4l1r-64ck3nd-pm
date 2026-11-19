@@ -5,7 +5,7 @@ It serves every master of **Organisasi & Approval**: Level Organisasi, Jenis Uni
 (Struktur organisasi), Grade Jabatan, Jabatan, Posisi (Jabatan & pejabat), Aturan Approval, Delegasi and Approval
 Custom (Alur approval); and Karyawan with the Employee Management masters it uses (Status Kepegawaian, Jenjang
 Pendidikan, Shift Kerja); and the global reference masters: **Keuangan & Pajak** (Mata Uang, Bank, Syarat
-Pembayaran, Jenis Pajak) and **Geografi & Lokasi** (Negara, Kota).
+Pembayaran, Jenis Pajak), **Geografi & Lokasi** (Negara, Kota) and **Mitra Bisnis** (Mitra Bisnis, Tenaga Penjualan).
 The other masters still come from the frontend's sample data until they move here.
 
 ```bash
@@ -49,7 +49,7 @@ Contract: `api/openapi.yaml`.
 | GET, PUT, DELETE | `/pm/masters/unit-types/{code}` | as levels; DELETE 409 while units use the type |
 | GET, POST | `/pm/masters/org-units` | units with `levelCode`, `parentCode`, `unitTypeCode` (and their ids); codes MUO001, … |
 | GET, PUT, DELETE | `/pm/masters/org-units/{code}` | as levels; DELETE 409 while it is used |
-| GET, POST, GET/PUT/DELETE `/{code}` | `/pm/masters/grades`, `/jabatan`, `/positions`, `/approval-rules`, `/delegations`, `/custom-flows`, `/employees`, `/employment-status`, `/education-levels`, `/work-shifts`, `/banks`, `/currencies`, `/countries`, `/cities`, `/payment-terms`, `/tax-types` | the same contract; relations by code (`gradeCode`, `levelCode`, `unitCode`, `jabatanCode`, `reportsToCode`, `positionCode`, `ruleCodes`, `ruleCode`, `scopeUnitCode`, `stepCodes`) |
+| GET, POST, GET/PUT/DELETE `/{code}` | `/pm/masters/grades`, `/jabatan`, `/positions`, `/approval-rules`, `/delegations`, `/custom-flows`, `/employees`, `/employment-status`, `/education-levels`, `/work-shifts`, `/banks`, `/currencies`, `/countries`, `/cities`, `/payment-terms`, `/tax-types`, `/sales-persons`, `/business-partners` | the same contract; relations by code (`gradeCode`, `levelCode`, `unitCode`, `jabatanCode`, `reportsToCode`, `positionCode`, `ruleCodes`, `ruleCode`, `scopeUnitCode`, `stepCodes`) |
 | GET | `/healthz`, `/readyz` | process up; database reachable |
 
 Errors are `{code, message, details?}` with Indonesian messages, the shape the ALIR API client reads, also for an
@@ -175,6 +175,15 @@ the JSON (see `migrations/000001_org_level.up.sql` and `internal/platform/record
   seeded only while those tables are empty. Bank adds `swiftCode` (BIC 8 or 11) and `countryCode`. Syarat
   Pembayaran: `days` 0–365 from a `basis` (invoice/receipt/BL date, ETD, ETA, end of month, delivery), optional down
   payment. Jenis Pajak: `ratePct` on `basePct` of the base gives `effectivePct`; PPN/PPnBM are added, PPh withheld.
+- **Mitra Bisnis:** one record per legal party with its `roles` (customer, vendor, shipper, consignee, notify_party,
+  agent, carrier, trucking, customs_broker, warehouse), never one per role. The lists `addresses`, `contacts` and
+  `bankAccounts` are arrays inside the record, replaced as a whole when sent (left out: kept); a problem in a row is
+  reported on `<list>.<row>.<cell>`, rows from 0; at most one `primary` row per list, the first when none is marked.
+  NPWP 16 digits (a 15-digit one gets a leading 0), NITKU = NPWP + 6 digits, PKP needs NPWP; one live partner per
+  NITKU, or per NPWP without NITKU (head office). Customer terms (payment term, currency and an address required for
+  the customer role; credit limit, credit hold, sales person) are kept only with the customer or agent role; vendor
+  terms (payment term, currency, a withheld PPh) only with a payable role; removing the role clears them.
+- **Tenaga Penjualan:** one live record per employee, optional sales unit and commission.
 - **Pending relations:** `unit_type.head_jabatan_id` stays NULL until the Jabatan master is served here; the API
   answers `headJabatanId: null` and ignores the head job title the form may send.
 - **Codes** are unique in any case, deleted rows included (unique index on `lower(code)`), and looked up in any case.
