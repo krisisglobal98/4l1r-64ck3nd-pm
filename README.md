@@ -5,7 +5,8 @@ It serves every master of **Organisasi & Approval**: Level Organisasi, Jenis Uni
 (Struktur organisasi), Grade Jabatan, Jabatan, Posisi (Jabatan & pejabat), Aturan Approval, Delegasi and Approval
 Custom (Alur approval); and Karyawan with the Employee Management masters it uses (Status Kepegawaian, Jenjang
 Pendidikan, Shift Kerja); and the global reference masters: **Keuangan & Pajak** (Mata Uang, Bank, Syarat
-Pembayaran, Jenis Pajak), **Geografi & Lokasi** (Negara, Kota) and **Mitra Bisnis** (Mitra Bisnis, Tenaga Penjualan).
+Pembayaran, Jenis Pajak), **Geografi & Lokasi** (Negara, Kota) **Mitra Bisnis** (Mitra Bisnis, Tenaga Penjualan) and **Logistik & Pengiriman** (Incoterms, Jenis Kontainer, Kemasan,
+Satuan, Komoditas) with Pelabuhan & Lokasi.
 The other masters still come from the frontend's sample data until they move here.
 
 ```bash
@@ -49,7 +50,7 @@ Contract: `api/openapi.yaml`.
 | GET, PUT, DELETE | `/pm/masters/unit-types/{code}` | as levels; DELETE 409 while units use the type |
 | GET, POST | `/pm/masters/org-units` | units with `levelCode`, `parentCode`, `unitTypeCode` (and their ids); codes MUO001, … |
 | GET, PUT, DELETE | `/pm/masters/org-units/{code}` | as levels; DELETE 409 while it is used |
-| GET, POST, GET/PUT/DELETE `/{code}` | `/pm/masters/grades`, `/jabatan`, `/positions`, `/approval-rules`, `/delegations`, `/custom-flows`, `/employees`, `/employment-status`, `/education-levels`, `/work-shifts`, `/banks`, `/currencies`, `/countries`, `/cities`, `/payment-terms`, `/tax-types`, `/sales-persons`, `/business-partners` | the same contract; relations by code (`gradeCode`, `levelCode`, `unitCode`, `jabatanCode`, `reportsToCode`, `positionCode`, `ruleCodes`, `ruleCode`, `scopeUnitCode`, `stepCodes`) |
+| GET, POST, GET/PUT/DELETE `/{code}` | `/pm/masters/grades`, `/jabatan`, `/positions`, `/approval-rules`, `/delegations`, `/custom-flows`, `/employees`, `/employment-status`, `/education-levels`, `/work-shifts`, `/banks`, `/currencies`, `/countries`, `/cities`, `/payment-terms`, `/tax-types`, `/sales-persons`, `/business-partners`, `/ports`, `/incoterms`, `/containers`, `/packagings`, `/uoms`, `/commodities` | the same contract; relations by code (`gradeCode`, `levelCode`, `unitCode`, `jabatanCode`, `reportsToCode`, `positionCode`, `ruleCodes`, `ruleCode`, `scopeUnitCode`, `stepCodes`) |
 | GET | `/healthz`, `/readyz` | process up; database reachable |
 
 Errors are `{code, message, details?}` with Indonesian messages, the shape the ALIR API client reads, also for an
@@ -183,6 +184,12 @@ the JSON (see `migrations/000001_org_level.up.sql` and `internal/platform/record
   NITKU, or per NPWP without NITKU (head office). Customer terms (payment term, currency and an address required for
   the customer role; credit limit, credit hold, sales person) are kept only with the customer or agent role; vendor
   terms (payment term, currency, a withheld PPh) only with a payable role; removing the role clears them.
+- **Logistics masters:** each keeps its international code in its own unique column (UN/LOCODE, IATA, ISO 6346,
+  UN/ECE Rec. 21 and 20; HS digits only, not unique). A location's UN/LOCODE starts with its country's ISO code, an
+  IATA code is for airports only, its city lies in its country. A new tenant gets Incoterms 2020, 10 container types,
+  12 packagings and 11 units (seeded while each table is empty). A container's TEU defaults from its length and
+  `payloadKg` = max gross − tare. Dangerous goods need a UN number and a class; otherwise both are cleared. A unit's
+  `factor` is in its dimension's base (kg, m³, m, m², piece, hour); dimension `other` has none.
 - **Tenaga Penjualan:** one live record per employee, optional sales unit and commission.
 - **Pending relations:** `unit_type.head_jabatan_id` stays NULL until the Jabatan master is served here; the API
   answers `headJabatanId: null` and ignores the head job title the form may send.

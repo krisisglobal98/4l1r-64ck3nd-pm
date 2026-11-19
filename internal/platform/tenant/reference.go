@@ -92,3 +92,109 @@ func seedReference(ctx context.Context, db *database.DB) error {
 	}
 	return nil
 }
+
+// Logistics reference data (Stage FF-1C-1), seeded the same way: once, while the table is empty.
+
+// Incoterms are the eleven rules of Incoterms 2020 (ICC): term, name, any mode (false: sea/inland waterway only), seller
+// pays the main carriage, seller insures, seller clears import, where the risk passes.
+var Incoterms = []struct {
+	Term, Name                        string
+	AnyMode, Carriage, Insures, Clear bool
+	Risk                              string
+}{
+	{"EXW", "Ex Works", true, false, false, false, "Saat barang disediakan di tempat penjual"},
+	{"FCA", "Free Carrier", true, false, false, false, "Saat barang diserahkan ke pengangkut yang ditunjuk pembeli"},
+	{"CPT", "Carriage Paid To", true, true, false, false, "Saat barang diserahkan ke pengangkut pertama"},
+	{"CIP", "Carriage and Insurance Paid To", true, true, true, false, "Saat barang diserahkan ke pengangkut pertama"},
+	{"DAP", "Delivered at Place", true, true, false, false, "Saat barang siap dibongkar di tempat tujuan"},
+	{"DPU", "Delivered at Place Unloaded", true, true, false, false, "Setelah barang dibongkar di tempat tujuan"},
+	{"DDP", "Delivered Duty Paid", true, true, false, true, "Saat barang siap dibongkar di tempat tujuan, impor sudah diurus penjual"},
+	{"FAS", "Free Alongside Ship", false, false, false, false, "Saat barang di samping kapal di pelabuhan muat"},
+	{"FOB", "Free On Board", false, false, false, false, "Saat barang di atas kapal di pelabuhan muat"},
+	{"CFR", "Cost and Freight", false, true, false, false, "Saat barang di atas kapal di pelabuhan muat"},
+	{"CIF", "Cost, Insurance and Freight", false, true, true, false, "Saat barang di atas kapal di pelabuhan muat"},
+}
+
+// ContainerTypes are the common ISO 6346 size-types; 30 480 kg is the ISO maximum gross mass of 20' and 40' boxes.
+var ContainerTypes = []struct {
+	Iso, Name, Height, Group string
+	Length                   int
+	Teu                      float64
+}{
+	{"22G1", "20' General Purpose (20GP)", "standard", "general", 20, 1},
+	{"42G1", "40' General Purpose (40GP)", "standard", "general", 40, 2},
+	{"45G1", "40' High Cube (40HC)", "high_cube", "general", 40, 2},
+	{"22R1", "20' Reefer (20RF)", "standard", "reefer", 20, 1},
+	{"45R1", "40' High Cube Reefer (40RH)", "high_cube", "reefer", 40, 2},
+	{"22U1", "20' Open Top (20OT)", "standard", "open_top", 20, 1},
+	{"42U1", "40' Open Top (40OT)", "standard", "open_top", 40, 2},
+	{"22P1", "20' Flat Rack (20FR)", "standard", "flat_rack", 20, 1},
+	{"42P1", "40' Flat Rack (40FR)", "standard", "flat_rack", 40, 2},
+	{"22T1", "20' Tank (20TK)", "standard", "tank", 20, 1},
+}
+
+// Packagings are common kinds of package with their UN/ECE Recommendation 21 code.
+var Packagings = []struct{ Code, Name string }{
+	{"BG", "Kantong (bag)"}, {"SA", "Karung (sack)"}, {"JB", "Jumbo bag"}, {"BX", "Kotak (box)"}, {"CT", "Karton"},
+	{"CS", "Peti (case)"}, {"CR", "Krat (crate)"}, {"DR", "Drum"}, {"PX", "Palet"}, {"BE", "Bundel"}, {"PK", "Paket"},
+	{"NE", "Tanpa kemasan"},
+}
+
+// Uoms are common units with their UN/ECE Recommendation 20 code and factor to the dimension's base unit.
+var Uoms = []struct {
+	Code, Name, Dimension string
+	Factor                float64
+}{
+	{"KGM", "Kilogram", "mass", 1}, {"GRM", "Gram", "mass", 0.001}, {"TNE", "Ton (metrik)", "mass", 1000},
+	{"MTQ", "Meter kubik", "volume", 1}, {"LTR", "Liter", "volume", 0.001},
+	{"MTR", "Meter", "length", 1}, {"CMT", "Sentimeter", "length", 0.01}, {"MTK", "Meter persegi", "area", 1},
+	{"H87", "Buah", "count", 1}, {"HUR", "Jam", "time", 1}, {"DAY", "Hari", "time", 24},
+}
+
+// seedLogistics adds the logistics reference rows to a tenant whose tables are still empty.
+func seedLogistics(ctx context.Context, db *database.DB) error {
+	codes := codeprefix.Postgres{DB: db}
+	seed := func(table string, n int, insert func(i int, code string) error) error {
+		var any bool
+		if err := db.Q(ctx).QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pm.`+table+`)`).Scan(&any); err != nil || any {
+			return err
+		}
+		for i := range n {
+			code, err := codes.Next(ctx, table)
+			if err != nil {
+				return err
+			}
+			if err := insert(i, code); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	exec := func(sql string, args ...any) error {
+		_, err := db.Q(ctx).Exec(ctx, sql, args...)
+		return err
+	}
+	if err := seed("incoterm", len(Incoterms), func(i int, code string) error {
+		x := Incoterms[i]
+		return exec(`INSERT INTO pm.incoterm (code, name, term, edition, any_mode, seller_pays_carriage, seller_insures, seller_clears_import, risk_point, created_by)
+			VALUES ($1, $2, $3, 2020, $4, $5, $6, $7, $8, $9)`, code, x.Name, x.Term, x.AnyMode, x.Carriage, x.Insures, x.Clear, x.Risk, systemUser)
+	}); err != nil {
+		return err
+	}
+	if err := seed("container_type", len(ContainerTypes), func(i int, code string) error {
+		x := ContainerTypes[i]
+		return exec(`INSERT INTO pm.container_type (code, name, iso_code, length_ft, height, type_group, teu, max_gross_kg, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, 30480, $8)`, code, x.Name, x.Iso, x.Length, x.Height, x.Group, x.Teu, systemUser)
+	}); err != nil {
+		return err
+	}
+	if err := seed("packaging", len(Packagings), func(i int, code string) error {
+		return exec(`INSERT INTO pm.packaging (code, name, unece_code, created_by) VALUES ($1, $2, $3, $4)`, code, Packagings[i].Name, Packagings[i].Code, systemUser)
+	}); err != nil {
+		return err
+	}
+	return seed("uom", len(Uoms), func(i int, code string) error {
+		x := Uoms[i]
+		return exec(`INSERT INTO pm.uom (code, name, unece_code, dimension, factor, created_by) VALUES ($1, $2, $3, $4, $5, $6)`, code, x.Name, x.Code, x.Dimension, x.Factor, systemUser)
+	})
+}

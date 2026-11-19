@@ -14,6 +14,8 @@ import (
 	"alir.local/pm-service/internal/approvalrule"
 	"alir.local/pm-service/internal/bank"
 	"alir.local/pm-service/internal/city"
+	"alir.local/pm-service/internal/commodity"
+	"alir.local/pm-service/internal/containertype"
 	"alir.local/pm-service/internal/country"
 	"alir.local/pm-service/internal/currency"
 	"alir.local/pm-service/internal/customflow"
@@ -22,9 +24,12 @@ import (
 	"alir.local/pm-service/internal/employee"
 	"alir.local/pm-service/internal/employmentstatus"
 	"alir.local/pm-service/internal/grade"
+	"alir.local/pm-service/internal/incoterm"
 	"alir.local/pm-service/internal/jabatan"
+	"alir.local/pm-service/internal/location"
 	"alir.local/pm-service/internal/orglevel"
 	"alir.local/pm-service/internal/orgunit"
+	"alir.local/pm-service/internal/packaging"
 	"alir.local/pm-service/internal/partner"
 	"alir.local/pm-service/internal/paymentterm"
 	"alir.local/pm-service/internal/platform/access"
@@ -40,6 +45,7 @@ import (
 	"alir.local/pm-service/internal/salesperson"
 	"alir.local/pm-service/internal/taxtype"
 	"alir.local/pm-service/internal/unittype"
+	"alir.local/pm-service/internal/uom"
 	"alir.local/pm-service/internal/workshift"
 )
 
@@ -106,6 +112,13 @@ func run() error {
 	// Mitra Bisnis
 	master.Routes(mux, "/pm/masters/sales-persons", salesperson.New(db))
 	master.Routes(mux, "/pm/masters/business-partners", partner.New(db))
+	// Logistik & Pengiriman, and the ports of Geografi & Lokasi
+	master.Routes(mux, "/pm/masters/ports", location.New(db))
+	master.Routes(mux, "/pm/masters/incoterms", incoterm.New(db))
+	master.Routes(mux, "/pm/masters/containers", containertype.New(db))
+	master.Routes(mux, "/pm/masters/packagings", packaging.New(db))
+	master.Routes(mux, "/pm/masters/uoms", uom.New(db))
+	master.Routes(mux, "/pm/masters/commodities", commodity.New(db))
 	master.Routes(mux, "/pm/masters/employees", employee.New(db))
 
 	// Who calls: the access token of the Authentication service; a default user only when chosen explicitly.

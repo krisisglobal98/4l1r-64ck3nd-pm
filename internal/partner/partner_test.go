@@ -82,8 +82,8 @@ func TestParseSides(t *testing.T) {
 
 func TestParseLists(t *testing.T) {
 	in, p := Parse(base(record.Values{
-		"addresses": []any{map[string]any{"address": "Kantor"}, map[string]any{"address": "Gudang", "kind": "warehouse"}},
-		"contacts":  []any{map[string]any{"name": "Budi", "phone": "+62 811 555 0101"}, map[string]any{"name": "Sari", "email": "SARI@X.CO.ID", "primary": true}},
+		"addresses":    []any{map[string]any{"address": "Kantor"}, map[string]any{"address": "Gudang", "kind": "warehouse"}},
+		"contacts":     []any{map[string]any{"name": "Budi", "phone": "+62 811 555 0101"}, map[string]any{"name": "Sari", "email": "SARI@X.CO.ID", "primary": true}},
 		"bankAccounts": []any{map[string]any{"bankCode": "MBK001", "accountNumber": "1234 5678 90", "accountName": "PT Uji", "currencyCode": "MMU001"}},
 	}))
 	if len(p) != 0 {
