@@ -13,3 +13,6 @@ coverage.*
 .vscode/
 .idea/
 *.log
+
+# Assistant tooling state (local)
+.omc/
