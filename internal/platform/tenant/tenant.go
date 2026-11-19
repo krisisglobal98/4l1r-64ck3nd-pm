@@ -1,5 +1,5 @@
-// Package tenant prepares a company (tenant) on its first request: the built-in organisation levels and the code
-// prefixes of every master. Everything else a tenant fills itself (or a seed does).
+// Package tenant prepares a company (tenant) on its first request: the built-in organisation levels, the code prefixes
+// of every master, and the standard reference data (currencies, countries). Everything else a tenant fills itself.
 package tenant
 
 import (
@@ -37,6 +37,8 @@ var Prefixes = []struct {
 	{"approval_rule", "Aturan Approval", "MAR", 3}, {"delegation", "Delegasi", "MDL", 3}, {"custom_flow", "Approval Custom", "MAC", 3},
 	{"employment_status", "Status Kepegawaian", "MSK", 3}, {"education_level", "Jenjang Pendidikan", "MJP", 3},
 	{"work_shift", "Shift Kerja", "MSF", 3}, {"bank", "Bank", "MBK", 3}, {"employee", "Karyawan", "MKY", 4},
+	{"currency", "Mata Uang", "MMU", 3}, {"country", "Negara", "MNG", 3}, {"city", "Kota", "MKT", 3},
+	{"payment_term", "Syarat Pembayaran", "MTP", 3}, {"tax_type", "Jenis Pajak", "MPJ", 3},
 }
 
 // Provisioner prepares each tenant once per process.
@@ -66,7 +68,7 @@ func (p *Provisioner) Ensure(ctx context.Context, tid string) error {
 				return err
 			}
 		}
-		return nil
+		return seedReference(ctx, p.DB)
 	})
 	if err == nil {
 		p.done.Store(tid, true)

@@ -81,6 +81,11 @@ var usage = map[string][]user{
 	"education_level":   {{"karyawan", `SELECT count(*) FROM pm.employee WHERE education_level_id = $1 AND NOT is_deleted`}},
 	"work_shift":        {{"karyawan", `SELECT count(*) FROM pm.employee WHERE work_shift_id = $1 AND NOT is_deleted`}},
 	"bank":              {{"karyawan", `SELECT count(*) FROM pm.employee WHERE bank_id = $1 AND NOT is_deleted`}},
+	"currency":          {{"negara", `SELECT count(*) FROM pm.country WHERE currency_id = $1 AND NOT is_deleted`}},
+	"country": {
+		{"kota", `SELECT count(*) FROM pm.city WHERE country_id = $1 AND NOT is_deleted`},
+		{"bank", `SELECT count(*) FROM pm.bank WHERE country_id = $1 AND NOT is_deleted`},
+	},
 	"employee": {
 		{"posisi (pemegang)", `SELECT count(*) FROM pm.position WHERE holder_employee_id = $1 AND NOT is_deleted`},
 		{"posisi (Plt)", `SELECT count(*) FROM pm.position WHERE acting_employee_id = $1 AND NOT is_deleted`},
@@ -132,4 +137,19 @@ func Pick(ctx context.Context, db *database.DB, table, field, label string, code
 		return nil, nil
 	}
 	return &r, nil
+}
+
+// Duplicate is the name of another live row of table whose column equals value (case-insensitive when ci), ""
+// when none; selfID is the row being saved ("" on create). Table and column are constants of the caller.
+func Duplicate(ctx context.Context, db *database.DB, table, column, value, selfID string, ci bool) (string, error) {
+	cond := column + ` = $1`
+	if ci {
+		cond = `lower(` + column + `) = lower($1)`
+	}
+	var other string
+	err := db.Q(ctx).QueryRow(ctx, `SELECT name FROM pm.`+table+` WHERE `+cond+` AND NOT is_deleted AND id::text <> $2`, value, selfID).Scan(&other)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return other, err
 }

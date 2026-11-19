@@ -88,6 +88,12 @@ func reset() {
 		`UPDATE pm.unit_type SET head_jabatan_id = NULL`,
 		`DELETE FROM pm.jabatan`, `DELETE FROM pm.grade`,
 		`DELETE FROM pm.employee`, `DELETE FROM pm.employment_status`, `DELETE FROM pm.education_level`, `DELETE FROM pm.work_shift`, `DELETE FROM pm.bank`,
+		// Reference masters: the standard rows of the migrated tenant stay (as seeded), everything else goes.
+		`DELETE FROM pm.city`, `DELETE FROM pm.payment_term`, `DELETE FROM pm.tax_type`,
+		`DELETE FROM pm.country WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
+		`DELETE FROM pm.currency WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
+		`UPDATE pm.country SET is_active = true, is_deleted = false, deleted_at = NULL, deleted_by = NULL, updated_at = NULL, updated_by = NULL, version = 1`,
+		`UPDATE pm.currency SET is_active = true, is_deleted = false, deleted_at = NULL, deleted_by = NULL, updated_at = NULL, updated_by = NULL, version = 1`,
 		`DELETE FROM pm.org_unit`,
 		`DELETE FROM pm.org_level WHERE code NOT IN ('group','region','wilayah','company','unit','org1','org2','org3')`,
 		`UPDATE pm.org_level SET name = CASE code WHEN 'group' THEN 'Group' WHEN 'region' THEN 'Region' WHEN 'wilayah' THEN 'Wilayah'
@@ -104,7 +110,10 @@ func reset() {
 		// Tenants other than the migrated one (the isolation suite) leave nothing behind.
 		`DELETE FROM pm.org_level WHERE tenant_id <> '` + tenantA + `'`, `DELETE FROM pm.unit_type WHERE tenant_id <> '` + tenantA + `'`,
 		`DELETE FROM pm.code_prefix WHERE tenant_id <> '` + tenantA + `'`,
-		`UPDATE pm.code_prefix SET last_number = 0, is_active = true WHERE code IN ('org_level', 'unit_type', 'org_unit', 'grade', 'jabatan', 'position', 'approval_rule', 'delegation', 'custom_flow', 'employment_status', 'education_level', 'work_shift', 'bank', 'employee')`,
+		`UPDATE pm.code_prefix SET last_number = 0, is_active = true WHERE code IN ('org_level', 'unit_type', 'org_unit', 'grade', 'jabatan', 'position', 'approval_rule', 'delegation', 'custom_flow', 'employment_status', 'education_level', 'work_shift', 'bank', 'employee', 'city', 'payment_term', 'tax_type')`,
+		// The seeded currencies and countries keep their numbers: the counter continues after them.
+		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.currency c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'currency'`,
+		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.country c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'country'`,
 	} {
 		if _, err := owner.Exec(ctx, q); err != nil {
 			panic(err)

@@ -245,3 +245,37 @@ func OptionalInt(v Values, key, label string, min int, p *Problems) *int {
 	}
 	return &n
 }
+
+// Decimal reads a number between min and max with at most places decimals; nil when blank (an error when
+// required).
+func Decimal(v Values, key, label string, min, max float64, places int, required bool, p *Problems) *float64 {
+	n, state := number(v[key])
+	switch {
+	case state == numBlank:
+		if required {
+			p.Add(key, fmt.Sprintf("%s wajib diisi.", label))
+		}
+		return nil
+	case state == numInvalid:
+		p.Add(key, fmt.Sprintf("%s harus berupa angka.", label))
+		return nil
+	case n < min || n > max:
+		p.Add(key, fmt.Sprintf("%s antara %s dan %s.", label, strconv.FormatFloat(min, 'f', -1, 64), strconv.FormatFloat(max, 'f', -1, 64)))
+		return nil
+	}
+	scale := math.Pow10(places)
+	if math.Abs(n*scale-math.Round(n*scale)) > 1e-6 {
+		p.Add(key, fmt.Sprintf("%s paling banyak %d angka di belakang koma.", label, places))
+		return nil
+	}
+	r := math.Round(n*scale) / scale
+	return &r
+}
+
+// ChoiceOr is Choice with a default when the field is absent or blank.
+func ChoiceOr(v Values, key, label string, allowed []string, def string, p *Problems) string {
+	if s, ok := v[key].(string); v[key] == nil || ok && strings.TrimSpace(s) == "" {
+		return def
+	}
+	return Choice(v, key, label, allowed, p)
+}

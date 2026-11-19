@@ -13,6 +13,9 @@ import (
 
 	"alir.local/pm-service/internal/approvalrule"
 	"alir.local/pm-service/internal/bank"
+	"alir.local/pm-service/internal/city"
+	"alir.local/pm-service/internal/country"
+	"alir.local/pm-service/internal/currency"
 	"alir.local/pm-service/internal/customflow"
 	"alir.local/pm-service/internal/delegation"
 	"alir.local/pm-service/internal/educationlevel"
@@ -22,6 +25,7 @@ import (
 	"alir.local/pm-service/internal/jabatan"
 	"alir.local/pm-service/internal/orglevel"
 	"alir.local/pm-service/internal/orgunit"
+	"alir.local/pm-service/internal/paymentterm"
 	"alir.local/pm-service/internal/platform/access"
 	"alir.local/pm-service/internal/platform/codeprefix"
 	"alir.local/pm-service/internal/platform/config"
@@ -32,6 +36,7 @@ import (
 	"alir.local/pm-service/internal/platform/outbox"
 	"alir.local/pm-service/internal/platform/tenant"
 	"alir.local/pm-service/internal/position"
+	"alir.local/pm-service/internal/taxtype"
 	"alir.local/pm-service/internal/unittype"
 	"alir.local/pm-service/internal/workshift"
 )
@@ -90,6 +95,12 @@ func run() error {
 	master.Routes(mux, "/pm/masters/education-levels", educationlevel.New(db))
 	master.Routes(mux, "/pm/masters/work-shifts", workshift.New(db))
 	master.Routes(mux, "/pm/masters/banks", bank.New(db))
+	// Keuangan & Pajak, Geografi & Lokasi (reference masters every module shares)
+	master.Routes(mux, "/pm/masters/currencies", currency.New(db))
+	master.Routes(mux, "/pm/masters/countries", country.New(db))
+	master.Routes(mux, "/pm/masters/cities", city.New(db))
+	master.Routes(mux, "/pm/masters/payment-terms", paymentterm.New(db))
+	master.Routes(mux, "/pm/masters/tax-types", taxtype.New(db))
 	master.Routes(mux, "/pm/masters/employees", employee.New(db))
 
 	// Who calls: the access token of the Authentication service; a default user only when chosen explicitly.

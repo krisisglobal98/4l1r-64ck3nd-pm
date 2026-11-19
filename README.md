@@ -4,7 +4,8 @@ Backend of Portal Master for the ALIR frontend (`../ALIR`). Go 1.25, PostgreSQL,
 It serves every master of **Organisasi & Approval**: Level Organisasi, Jenis Unit Operasional, Unit Organisasi
 (Struktur organisasi), Grade Jabatan, Jabatan, Posisi (Jabatan & pejabat), Aturan Approval, Delegasi and Approval
 Custom (Alur approval); and Karyawan with the Employee Management masters it uses (Status Kepegawaian, Jenjang
-Pendidikan, Shift Kerja, Bank).
+Pendidikan, Shift Kerja); and the global reference masters: **Keuangan & Pajak** (Mata Uang, Bank, Syarat
+Pembayaran, Jenis Pajak) and **Geografi & Lokasi** (Negara, Kota).
 The other masters still come from the frontend's sample data until they move here.
 
 ```bash
@@ -48,7 +49,7 @@ Contract: `api/openapi.yaml`.
 | GET, PUT, DELETE | `/pm/masters/unit-types/{code}` | as levels; DELETE 409 while units use the type |
 | GET, POST | `/pm/masters/org-units` | units with `levelCode`, `parentCode`, `unitTypeCode` (and their ids); codes MUO001, … |
 | GET, PUT, DELETE | `/pm/masters/org-units/{code}` | as levels; DELETE 409 while it is used |
-| GET, POST, GET/PUT/DELETE `/{code}` | `/pm/masters/grades`, `/jabatan`, `/positions`, `/approval-rules`, `/delegations`, `/custom-flows`, `/employees`, `/employment-status`, `/education-levels`, `/work-shifts`, `/banks` | the same contract; relations by code (`gradeCode`, `levelCode`, `unitCode`, `jabatanCode`, `reportsToCode`, `positionCode`, `ruleCodes`, `ruleCode`, `scopeUnitCode`, `stepCodes`) |
+| GET, POST, GET/PUT/DELETE `/{code}` | `/pm/masters/grades`, `/jabatan`, `/positions`, `/approval-rules`, `/delegations`, `/custom-flows`, `/employees`, `/employment-status`, `/education-levels`, `/work-shifts`, `/banks`, `/currencies`, `/countries`, `/cities`, `/payment-terms`, `/tax-types` | the same contract; relations by code (`gradeCode`, `levelCode`, `unitCode`, `jabatanCode`, `reportsToCode`, `positionCode`, `ruleCodes`, `ruleCode`, `scopeUnitCode`, `stepCodes`) |
 | GET | `/healthz`, `/readyz` | process up; database reachable |
 
 Errors are `{code, message, details?}` with Indonesian messages, the shape the ALIR API client reads, also for an
@@ -169,6 +170,11 @@ the JSON (see `migrations/000001_org_level.up.sql` and `internal/platform/record
 - **Karyawan:** one live employee per NIK; status kepegawaian required, education, shift and bank optional. A
   position's holder and Plt and a delegation's delegate are employees (Plt never the holder; a delegate never the
   holder of the position). Shift times are wall-clock HH:MM; a shift ending the next day is a night shift.
+- **Reference masters:** ISO codes (`isoCode` ISO 4217; `iso2`/`iso3` ISO 3166) are separate unique columns; the
+  business `code` is still generated (MMU, MNG, MKT, MTP, MPJ). A new tenant gets 36 currencies and 42 countries,
+  seeded only while those tables are empty. Bank adds `swiftCode` (BIC 8 or 11) and `countryCode`. Syarat
+  Pembayaran: `days` 0–365 from a `basis` (invoice/receipt/BL date, ETD, ETA, end of month, delivery), optional down
+  payment. Jenis Pajak: `ratePct` on `basePct` of the base gives `effectivePct`; PPN/PPnBM are added, PPh withheld.
 - **Pending relations:** `unit_type.head_jabatan_id` stays NULL until the Jabatan master is served here; the API
   answers `headJabatanId: null` and ignores the head job title the form may send.
 - **Codes** are unique in any case, deleted rows included (unique index on `lower(code)`), and looked up in any case.
