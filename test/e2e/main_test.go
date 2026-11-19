@@ -87,6 +87,7 @@ func reset() {
 		`DELETE FROM pm.position`,
 		`UPDATE pm.unit_type SET head_jabatan_id = NULL`,
 		`DELETE FROM pm.jabatan`, `DELETE FROM pm.grade`,
+		`DELETE FROM pm.exchange_rate`, `DELETE FROM pm.charge_code_rate`, `DELETE FROM pm.charge_code`, `DELETE FROM pm.company_bank_account`,
 		`DELETE FROM pm.business_partner_address`, `DELETE FROM pm.business_partner_contact`, `DELETE FROM pm.business_partner_bank_account`,
 		`DELETE FROM pm.business_partner`, `DELETE FROM pm.sales_person`,
 		`DELETE FROM pm.employee`, `DELETE FROM pm.employment_status`, `DELETE FROM pm.education_level`, `DELETE FROM pm.work_shift`, `DELETE FROM pm.bank`,
@@ -101,6 +102,10 @@ func reset() {
 		`DELETE FROM pm.container_type WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
 		`DELETE FROM pm.packaging WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
 		`DELETE FROM pm.uom WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
+		`DELETE FROM pm.document_type WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
+		`DELETE FROM pm.service_type WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
+		`UPDATE pm.document_type SET is_active = true, is_deleted = false, deleted_at = NULL, deleted_by = NULL, updated_at = NULL, updated_by = NULL, version = 1`,
+		`UPDATE pm.service_type SET is_active = true, is_deleted = false, deleted_at = NULL, deleted_by = NULL, updated_at = NULL, updated_by = NULL, version = 1`,
 		`UPDATE pm.incoterm SET is_active = true, is_deleted = false, deleted_at = NULL, deleted_by = NULL, updated_at = NULL, updated_by = NULL, version = 1`,
 		`UPDATE pm.container_type SET is_active = true, is_deleted = false, deleted_at = NULL, deleted_by = NULL, updated_at = NULL, updated_by = NULL, version = 1`,
 		`UPDATE pm.packaging SET is_active = true, is_deleted = false, deleted_at = NULL, deleted_by = NULL, updated_at = NULL, updated_by = NULL, version = 1`,
@@ -122,7 +127,7 @@ func reset() {
 		// Tenants other than the migrated one (the isolation suite) leave nothing behind.
 		`DELETE FROM pm.org_level WHERE tenant_id <> '` + tenantA + `'`, `DELETE FROM pm.unit_type WHERE tenant_id <> '` + tenantA + `'`,
 		`DELETE FROM pm.code_prefix WHERE tenant_id <> '` + tenantA + `'`,
-		`UPDATE pm.code_prefix SET last_number = 0, is_active = true WHERE code IN ('org_level', 'unit_type', 'org_unit', 'grade', 'jabatan', 'position', 'approval_rule', 'delegation', 'custom_flow', 'employment_status', 'education_level', 'work_shift', 'bank', 'employee', 'city', 'payment_term', 'tax_type', 'business_partner', 'sales_person', 'location', 'commodity')`,
+		`UPDATE pm.code_prefix SET last_number = 0, is_active = true WHERE code IN ('org_level', 'unit_type', 'org_unit', 'grade', 'jabatan', 'position', 'approval_rule', 'delegation', 'custom_flow', 'employment_status', 'education_level', 'work_shift', 'bank', 'employee', 'city', 'payment_term', 'tax_type', 'business_partner', 'sales_person', 'location', 'commodity', 'exchange_rate', 'charge_code', 'company_bank_account')`,
 		// The seeded currencies and countries keep their numbers: the counter continues after them.
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.currency c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'currency'`,
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.country c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'country'`,
@@ -130,6 +135,8 @@ func reset() {
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.container_type c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'container_type'`,
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.packaging c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'packaging'`,
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.uom c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'uom'`,
+		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.document_type c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'document_type'`,
+		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.service_type c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'service_type'`,
 	} {
 		if _, err := owner.Exec(ctx, q); err != nil {
 			panic(err)

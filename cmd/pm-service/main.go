@@ -13,16 +13,20 @@ import (
 
 	"alir.local/pm-service/internal/approvalrule"
 	"alir.local/pm-service/internal/bank"
+	"alir.local/pm-service/internal/chargecode"
 	"alir.local/pm-service/internal/city"
 	"alir.local/pm-service/internal/commodity"
+	"alir.local/pm-service/internal/companyaccount"
 	"alir.local/pm-service/internal/containertype"
 	"alir.local/pm-service/internal/country"
 	"alir.local/pm-service/internal/currency"
 	"alir.local/pm-service/internal/customflow"
 	"alir.local/pm-service/internal/delegation"
+	"alir.local/pm-service/internal/documenttype"
 	"alir.local/pm-service/internal/educationlevel"
 	"alir.local/pm-service/internal/employee"
 	"alir.local/pm-service/internal/employmentstatus"
+	"alir.local/pm-service/internal/exchangerate"
 	"alir.local/pm-service/internal/grade"
 	"alir.local/pm-service/internal/incoterm"
 	"alir.local/pm-service/internal/jabatan"
@@ -43,6 +47,7 @@ import (
 	"alir.local/pm-service/internal/platform/tenant"
 	"alir.local/pm-service/internal/position"
 	"alir.local/pm-service/internal/salesperson"
+	"alir.local/pm-service/internal/servicetype"
 	"alir.local/pm-service/internal/taxtype"
 	"alir.local/pm-service/internal/unittype"
 	"alir.local/pm-service/internal/uom"
@@ -119,6 +124,12 @@ func run() error {
 	master.Routes(mux, "/pm/masters/packagings", packaging.New(db))
 	master.Routes(mux, "/pm/masters/uoms", uom.New(db))
 	master.Routes(mux, "/pm/masters/commodities", commodity.New(db))
+	master.Routes(mux, "/pm/masters/service-types", servicetype.New(db))
+	// Keuangan & Pajak: rates, charges, the company's accounts; Dokumen
+	exchangerate.Routes(mux, "/pm/masters/exchange-rates", db)
+	master.Routes(mux, "/pm/masters/charges", chargecode.New(db))
+	master.Routes(mux, "/pm/masters/company-bank-accounts", companyaccount.New(db))
+	master.Routes(mux, "/pm/masters/document-types", documenttype.New(db))
 	master.Routes(mux, "/pm/masters/employees", employee.New(db))
 
 	// Who calls: the access token of the Authentication service; a default user only when chosen explicitly.

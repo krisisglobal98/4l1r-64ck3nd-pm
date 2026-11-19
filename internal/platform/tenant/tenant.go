@@ -42,6 +42,8 @@ var Prefixes = []struct {
 	{"business_partner", "Mitra Bisnis", "MMB", 4}, {"sales_person", "Tenaga Penjualan", "MTJ", 3},
 	{"location", "Pelabuhan & Lokasi", "MLK", 3}, {"incoterm", "Incoterms", "MIC", 3}, {"container_type", "Jenis Kontainer", "MKN", 3},
 	{"packaging", "Kemasan", "MKM", 3}, {"uom", "Satuan", "MST", 3}, {"commodity", "Komoditas", "MKD", 3},
+	{"exchange_rate", "Kurs", "MKR", 6}, {"charge_code", "Kode Biaya", "MKB", 3}, {"company_bank_account", "Rekening Bank Perusahaan", "MRP", 3},
+	{"document_type", "Jenis Dokumen", "MJD", 3}, {"service_type", "Moda & Layanan", "MML", 3},
 }
 
 // Provisioner prepares each tenant once per process.
@@ -74,7 +76,10 @@ func (p *Provisioner) Ensure(ctx context.Context, tid string) error {
 		if err := seedReference(ctx, p.DB); err != nil {
 			return err
 		}
-		return seedLogistics(ctx, p.DB)
+		if err := seedLogistics(ctx, p.DB); err != nil {
+			return err
+		}
+		return seedDocuments(ctx, p.DB)
 	})
 	if err == nil {
 		p.done.Store(tid, true)

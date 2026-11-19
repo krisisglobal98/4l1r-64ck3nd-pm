@@ -6,7 +6,8 @@ It serves every master of **Organisasi & Approval**: Level Organisasi, Jenis Uni
 Custom (Alur approval); and Karyawan with the Employee Management masters it uses (Status Kepegawaian, Jenjang
 Pendidikan, Shift Kerja); and the global reference masters: **Keuangan & Pajak** (Mata Uang, Bank, Syarat
 Pembayaran, Jenis Pajak), **Geografi & Lokasi** (Negara, Kota) **Mitra Bisnis** (Mitra Bisnis, Tenaga Penjualan) and **Logistik & Pengiriman** (Incoterms, Jenis Kontainer, Kemasan,
-Satuan, Komoditas) with Pelabuhan & Lokasi.
+Satuan, Komoditas, Moda & Layanan) with Pelabuhan & Lokasi; Kurs, Kode Biaya and Rekening Bank Perusahaan
+(Keuangan & Pajak); and **Dokumen** (Jenis Dokumen).
 The other masters still come from the frontend's sample data until they move here.
 
 ```bash
@@ -50,7 +51,7 @@ Contract: `api/openapi.yaml`.
 | GET, PUT, DELETE | `/pm/masters/unit-types/{code}` | as levels; DELETE 409 while units use the type |
 | GET, POST | `/pm/masters/org-units` | units with `levelCode`, `parentCode`, `unitTypeCode` (and their ids); codes MUO001, … |
 | GET, PUT, DELETE | `/pm/masters/org-units/{code}` | as levels; DELETE 409 while it is used |
-| GET, POST, GET/PUT/DELETE `/{code}` | `/pm/masters/grades`, `/jabatan`, `/positions`, `/approval-rules`, `/delegations`, `/custom-flows`, `/employees`, `/employment-status`, `/education-levels`, `/work-shifts`, `/banks`, `/currencies`, `/countries`, `/cities`, `/payment-terms`, `/tax-types`, `/sales-persons`, `/business-partners`, `/ports`, `/incoterms`, `/containers`, `/packagings`, `/uoms`, `/commodities` | the same contract; relations by code (`gradeCode`, `levelCode`, `unitCode`, `jabatanCode`, `reportsToCode`, `positionCode`, `ruleCodes`, `ruleCode`, `scopeUnitCode`, `stepCodes`) |
+| GET, POST, GET/PUT/DELETE `/{code}` | `/pm/masters/grades`, `/jabatan`, `/positions`, `/approval-rules`, `/delegations`, `/custom-flows`, `/employees`, `/employment-status`, `/education-levels`, `/work-shifts`, `/banks`, `/currencies`, `/countries`, `/cities`, `/payment-terms`, `/tax-types`, `/sales-persons`, `/business-partners`, `/ports`, `/incoterms`, `/containers`, `/packagings`, `/uoms`, `/commodities`, `/service-types`, `/exchange-rates`, `/charges`, `/company-bank-accounts`, `/document-types` | the same contract; relations by code (`gradeCode`, `levelCode`, `unitCode`, `jabatanCode`, `reportsToCode`, `positionCode`, `ruleCodes`, `ruleCode`, `scopeUnitCode`, `stepCodes`) |
 | GET | `/healthz`, `/readyz` | process up; database reachable |
 
 Errors are `{code, message, details?}` with Indonesian messages, the shape the ALIR API client reads, also for an
@@ -190,6 +191,16 @@ the JSON (see `migrations/000001_org_level.up.sql` and `internal/platform/record
   12 packagings and 11 units (seeded while each table is empty). A container's TEU defaults from its length and
   `payloadKg` = max gross − tare. Dangerous goods need a UN number and a class; otherwise both are cleared. A unit's
   `factor` is in its dimension's base (kg, m³, m, m², piece, hour); dimension `other` has none.
+- **Kurs:** history, one record per pair, type (`tax`, `bi_middle`, `bank_buy`, `bank_sell`, `internal`) and
+  `validFrom` (required); the target currency defaults to IDR and the name is made from pair, type and date.
+  `GET /pm/masters/exchange-rates/lookup?from=USD&to=IDR&type=tax&date=YYYY-MM-DD` answers the latest active rate
+  valid on that date (404 when none; codes or ISO codes; defaults to=IDR, type=tax, date=today UTC).
+- **Kode Biaya:** one code for both sides (`receivable` billed to customers, `payable` paid to vendors; at least one).
+  PPN (added) only with receivable, PPh (withheld) only with payable, otherwise cleared; `rates` per container type
+  and currency only for basis `container`; a default rate needs a currency except basis `percent` (≤ 100).
+- **Rekening Bank Perusahaan:** once per bank and number; one `invoiceDefault` per currency and owning unit, never a
+  payroll or tax account. **Jenis Dokumen:** a BC code once; export, import or domestic. **Moda & Layanan:** the load
+  type fits the mode; FCL always needs containers. New tenants get 17 document types and 10 services.
 - **Tenaga Penjualan:** one live record per employee, optional sales unit and commission.
 - **Pending relations:** `unit_type.head_jabatan_id` stays NULL until the Jabatan master is served here; the API
   answers `headJabatanId: null` and ignores the head job title the form may send.

@@ -198,3 +198,81 @@ func seedLogistics(ctx context.Context, db *database.DB) error {
 		return exec(`INSERT INTO pm.uom (code, name, unece_code, dimension, factor, created_by) VALUES ($1, $2, $3, $4, $5, $6)`, code, x.Name, x.Code, x.Dimension, x.Factor, systemUser)
 	})
 }
+
+// Document and service reference data (Stage FF-1C-2), seeded once while the table is empty.
+
+// DocumentTypes are common shipping, customs, commercial and certificate documents. Flags: export, import, domestic,
+// number required, has expiry, original required.
+var DocumentTypes = []struct {
+	Name, Group, Customs, Issuer        string
+	Exp, Imp, Dom, Number, Expiry, Orig bool
+}{
+	{"Bill of Lading (B/L)", "shipping", "", "carrier", true, true, false, true, false, true},
+	{"House Bill of Lading (HBL)", "shipping", "", "forwarder", true, true, false, true, false, true},
+	{"Sea Waybill", "shipping", "", "carrier", true, true, false, true, false, false},
+	{"Air Waybill (AWB)", "shipping", "", "carrier", true, true, true, true, false, false},
+	{"Delivery Order (DO)", "shipping", "", "carrier", false, true, true, true, true, false},
+	{"Shipping Instruction (SI)", "shipping", "", "shipper", true, false, true, false, false, false},
+	{"Packing List", "commercial", "", "shipper", true, true, true, false, false, false},
+	{"Commercial Invoice", "commercial", "", "shipper", true, true, false, true, false, false},
+	{"Pemberitahuan Impor Barang (PIB)", "customs", "BC 2.0", "customs", false, true, false, true, false, false},
+	{"Pemberitahuan Ekspor Barang (PEB)", "customs", "BC 3.0", "customs", true, false, false, true, false, false},
+	{"Manifes (Inward/Outward)", "customs", "BC 1.1", "carrier", true, true, false, true, false, false},
+	{"Surat Persetujuan Pengeluaran Barang (SPPB)", "customs", "", "customs", false, true, false, true, false, false},
+	{"Nota Pelayanan Ekspor (NPE)", "customs", "", "customs", true, false, false, true, false, false},
+	{"Surat Keterangan Asal (SKA / COO)", "certificate", "", "government", true, true, false, true, false, true},
+	{"Sertifikat Fitosanitari", "certificate", "", "government", true, true, false, true, true, true},
+	{"Sertifikat Fumigasi", "certificate", "", "other", true, true, false, true, false, false},
+	{"Polis Asuransi Kargo", "insurance", "", "other", true, true, true, true, true, false},
+}
+
+// ServiceTypes are common forwarding services: mode, load type, needs containers, includes customs.
+var ServiceTypes = []struct {
+	Name, Mode, Load   string
+	Container, Customs bool
+}{
+	{"Sea Freight FCL", "sea", "fcl", true, false}, {"Sea Freight LCL", "sea", "lcl", false, false},
+	{"Sea Freight Bulk", "sea", "bulk", false, false}, {"Sea Freight Breakbulk", "sea", "breakbulk", false, false},
+	{"Air Freight", "air", "general", false, false}, {"Trucking FTL", "land", "ftl", false, false},
+	{"Trucking LTL", "land", "ltl", false, false}, {"Door to Door", "multimodal", "general", false, true},
+	{"Customs Clearance (PPJK)", "none", "none", false, true}, {"Warehousing", "none", "none", false, false},
+}
+
+// seedDocuments adds the document and service types to a tenant whose tables are still empty.
+func seedDocuments(ctx context.Context, db *database.DB) error {
+	codes := codeprefix.Postgres{DB: db}
+	empty := func(table string) (bool, error) {
+		var any bool
+		err := db.Q(ctx).QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pm.`+table+`)`).Scan(&any)
+		return !any, err
+	}
+	if ok, err := empty("document_type"); err != nil {
+		return err
+	} else if ok {
+		for _, d := range DocumentTypes {
+			code, err := codes.Next(ctx, "document_type")
+			if err != nil {
+				return err
+			}
+			if _, err := db.Q(ctx).Exec(ctx, `INSERT INTO pm.document_type (code, name, doc_group, customs_code, issuer, for_export, for_import, for_domestic,
+				number_required, has_expiry, original_required, created_by) VALUES ($1, $2, $3, nullif($4, ''), $5, $6, $7, $8, $9, $10, $11, $12)`,
+				code, d.Name, d.Group, d.Customs, d.Issuer, d.Exp, d.Imp, d.Dom, d.Number, d.Expiry, d.Orig, systemUser); err != nil {
+				return err
+			}
+		}
+	}
+	if ok, err := empty("service_type"); err != nil || !ok {
+		return err
+	}
+	for _, s := range ServiceTypes {
+		code, err := codes.Next(ctx, "service_type")
+		if err != nil {
+			return err
+		}
+		if _, err := db.Q(ctx).Exec(ctx, `INSERT INTO pm.service_type (code, name, mode, load_type, needs_container, includes_customs, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`, code, s.Name, s.Mode, s.Load, s.Container, s.Customs, systemUser); err != nil {
+			return err
+		}
+	}
+	return nil
+}
