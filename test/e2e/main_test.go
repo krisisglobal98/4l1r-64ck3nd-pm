@@ -102,6 +102,8 @@ func reset() {
 		`DELETE FROM pm.container_type WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
 		`DELETE FROM pm.packaging WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
 		`DELETE FROM pm.uom WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
+		`DELETE FROM pm.doc_numbering WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
+		`UPDATE pm.doc_numbering SET is_active = true, is_deleted = false, deleted_at = NULL, deleted_by = NULL, updated_at = NULL, updated_by = NULL, version = 1`,
 		`DELETE FROM pm.document_type WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
 		`DELETE FROM pm.service_type WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
 		`UPDATE pm.document_type SET is_active = true, is_deleted = false, deleted_at = NULL, deleted_by = NULL, updated_at = NULL, updated_by = NULL, version = 1`,
@@ -137,6 +139,7 @@ func reset() {
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.uom c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'uom'`,
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.document_type c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'document_type'`,
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.service_type c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'service_type'`,
+		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.doc_numbering c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'doc_numbering'`,
 	} {
 		if _, err := owner.Exec(ctx, q); err != nil {
 			panic(err)

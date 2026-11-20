@@ -31,6 +31,7 @@ import (
 	"alir.local/pm-service/internal/incoterm"
 	"alir.local/pm-service/internal/jabatan"
 	"alir.local/pm-service/internal/location"
+	"alir.local/pm-service/internal/numbering"
 	"alir.local/pm-service/internal/orglevel"
 	"alir.local/pm-service/internal/orgunit"
 	"alir.local/pm-service/internal/packaging"
@@ -127,6 +128,8 @@ func run() error {
 	master.Routes(mux, "/pm/masters/service-types", servicetype.New(db))
 	// Keuangan & Pajak: rates, charges, the company's accounts; Dokumen
 	exchangerate.Routes(mux, "/pm/masters/exchange-rates", db)
+	// Pengaturan Sistem
+	numbering.Routes(mux, "/pm/masters/numbering", db)
 	master.Routes(mux, "/pm/masters/charges", chargecode.New(db))
 	master.Routes(mux, "/pm/masters/company-bank-accounts", companyaccount.New(db))
 	master.Routes(mux, "/pm/masters/document-types", documenttype.New(db))

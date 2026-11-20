@@ -276,3 +276,32 @@ func seedDocuments(ctx context.Context, db *database.DB) error {
 	}
 	return nil
 }
+
+// Numberings are the standard number patterns a tenant starts with (Format Penomoran Dokumen), valid from 2026-01-01;
+// the owning service keeps the counter.
+var Numberings = []struct{ DocType, Name, Module, Pattern, Reset string }{
+	{"FF.JOB", "Job Freight Forwarding", "freight-forwarding", "{SEQ:4}/{MM}/{YY}", "monthly"},
+}
+
+// seedNumbering adds the standard patterns whose document type the tenant has none of yet.
+func seedNumbering(ctx context.Context, db *database.DB) error {
+	codes := codeprefix.Postgres{DB: db}
+	for _, n := range Numberings {
+		var exists bool
+		if err := db.Q(ctx).QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pm.doc_numbering WHERE doc_type = $1)`, n.DocType).Scan(&exists); err != nil || exists {
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		code, err := codes.Next(ctx, "doc_numbering")
+		if err != nil {
+			return err
+		}
+		if _, err := db.Q(ctx).Exec(ctx, `INSERT INTO pm.doc_numbering (code, name, doc_type, module, pattern, reset, scope, start_number, valid_from, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, 'global', 1, DATE '2026-01-01', $7)`, code, n.Name, n.DocType, n.Module, n.Pattern, n.Reset, systemUser); err != nil {
+			return err
+		}
+	}
+	return nil
+}
