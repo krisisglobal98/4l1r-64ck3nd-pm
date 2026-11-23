@@ -17,6 +17,7 @@ import (
 	"alir.local/pm-service/internal/city"
 	"alir.local/pm-service/internal/commodity"
 	"alir.local/pm-service/internal/companyaccount"
+	"alir.local/pm-service/internal/coa"
 	"alir.local/pm-service/internal/companyprofile"
 	"alir.local/pm-service/internal/containertype"
 	"alir.local/pm-service/internal/country"
@@ -115,6 +116,7 @@ func run() error {
 	companyprofile.PrintRoutes(mux, db)
 	master.Routes(mux, "/pm/masters/system-parameters", sysparam.New(db))
 	sysparam.ReadRoutes(mux, db)
+	master.Routes(mux, "/pm/masters/accounts", coa.New(db))
 	// Keuangan & Pajak, Geografi & Lokasi (reference masters every module shares)
 	master.Routes(mux, "/pm/masters/currencies", currency.New(db))
 	master.Routes(mux, "/pm/masters/countries", country.New(db))

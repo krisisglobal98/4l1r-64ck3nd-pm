@@ -157,3 +157,21 @@ func retryable(err error) bool {
 func WithTx(ctx context.Context, tx pgx.Tx) context.Context {
 	return context.WithValue(ctx, txKey{}, tx)
 }
+
+// Savepoint runs fn in a savepoint of the transaction in ctx (which must be in one): an error of fn — a refused row of
+// an import, say — rolls back only what fn did, and the transaction goes on.
+func (d *DB) Savepoint(ctx context.Context, fn func(ctx context.Context) error) error {
+	tx, ok := ctx.Value(txKey{}).(pgx.Tx)
+	if !ok {
+		return errors.New("savepoint outside a transaction")
+	}
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	if err := fn(context.WithValue(ctx, txKey{}, sp)); err != nil {
+		_ = sp.Rollback(ctx)
+		return err
+	}
+	return sp.Commit(ctx)
+}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"alir.local/pm-service/internal/coa"
 	"alir.local/pm-service/internal/platform/codeprefix"
 	"alir.local/pm-service/internal/platform/database"
 	"alir.local/pm-service/internal/platform/master"
@@ -41,29 +42,34 @@ type ContainerRate struct {
 
 type Charge struct {
 	record.Base
-	Group          string          `json:"group"`
-	Receivable     bool            `json:"receivable"`
-	Payable        bool            `json:"payable"`
-	Basis          string          `json:"basis"`
-	CurrencyID     *string         `json:"currencyId"`
-	CurrencyCode   *string         `json:"currencyCode"`
-	DefaultRate    *float64        `json:"defaultRate"`
-	PpnTaxTypeID   *string         `json:"ppnTaxTypeId"`
-	PpnTaxTypeCode *string         `json:"ppnTaxTypeCode"`
-	PphTaxTypeID   *string         `json:"pphTaxTypeId"`
-	PphTaxTypeCode *string         `json:"pphTaxTypeCode"`
-	AccountCode    *string         `json:"accountCode"`
-	Rates          []ContainerRate `json:"rates"`
+	Group              string          `json:"group"`
+	Receivable         bool            `json:"receivable"`
+	Payable            bool            `json:"payable"`
+	Basis              string          `json:"basis"`
+	CurrencyID         *string         `json:"currencyId"`
+	CurrencyCode       *string         `json:"currencyCode"`
+	DefaultRate        *float64        `json:"defaultRate"`
+	PpnTaxTypeID       *string         `json:"ppnTaxTypeId"`
+	PpnTaxTypeCode     *string         `json:"ppnTaxTypeCode"`
+	PphTaxTypeID       *string         `json:"pphTaxTypeId"`
+	PphTaxTypeCode     *string         `json:"pphTaxTypeCode"`
+	RevenueAccountID   *string         `json:"revenueAccountId"`
+	RevenueAccountCode *string         `json:"revenueAccountCode"`
+	CostAccountID      *string         `json:"costAccountId"`
+	CostAccountCode    *string         `json:"costAccountCode"`
+	Rates              []ContainerRate `json:"rates"`
 }
 
 type Input struct {
 	record.Input
-	Group, Basis                            string
-	Receivable, Payable                     bool
-	CurrencyCode, PpnCode, PphCode, Account *string
-	DefaultRate                             *float64
-	Rates                                   []ContainerRate
-	CurrencyID, PpnID, PphID                *string
+	Group, Basis                        string
+	Receivable, Payable                 bool
+	CurrencyCode, PpnCode, PphCode      *string
+	RevenueAccountCode, CostAccountCode *string
+	RevenueAccountID, CostAccountID     *string
+	DefaultRate                         *float64
+	Rates                               []ContainerRate
+	CurrencyID, PpnID, PphID            *string
 }
 
 func Parse(v record.Values) (Input, record.Problems) {
@@ -91,7 +97,13 @@ func Parse(v record.Values) (Input, record.Problems) {
 	if in.Payable {
 		in.PphCode = record.OptionalText(v, "pphTaxTypeCode", "PPh", record.MaxCode, &p)
 	}
-	in.Account = record.OptionalText(v, "accountCode", "Kode akun", 30, &p)
+	// The revenue account when billed to a customer, the cost account when paid to a vendor (Bagan Akun).
+	if in.Receivable {
+		in.RevenueAccountCode = record.OptionalText(v, "revenueAccountCode", "Akun pendapatan", record.MaxCode, &p)
+	}
+	if in.Payable {
+		in.CostAccountCode = record.OptionalText(v, "costAccountCode", "Akun beban", record.MaxCode, &p)
+	}
 	if in.Basis == "container" {
 		in.Rates = parseRates(v, &p)
 	}
@@ -125,7 +137,9 @@ func parseRates(v record.Values, p *record.Problems) []ContainerRate {
 func values(x Charge) record.Values {
 	v := record.ValuesOf(x.Base)
 	v["group"], v["receivable"], v["payable"], v["basis"] = x.Group, x.Receivable, x.Payable, x.Basis
-	v["currencyCode"], v["defaultRate"], v["ppnTaxTypeCode"], v["pphTaxTypeCode"], v["accountCode"] = record.Opt(x.CurrencyCode), record.Opt(x.DefaultRate), record.Opt(x.PpnTaxTypeCode), record.Opt(x.PphTaxTypeCode), record.Opt(x.AccountCode)
+	v["currencyCode"], v["defaultRate"], v["ppnTaxTypeCode"], v["pphTaxTypeCode"], v["accountCode"] = record.Opt(x.CurrencyCode), record.Opt(x.DefaultRate), record.Opt(x.PpnTaxTypeCode), record.Opt(x.PphTaxTypeCode), nil
+	v["revenueAccountCode"], v["costAccountCode"] = record.Opt(x.RevenueAccountCode), record.Opt(x.CostAccountCode)
+	delete(v, "accountCode")
 	var rows []any
 	for _, r := range x.Rates {
 		rows = append(rows, map[string]any{"containerTypeCode": r.ContainerTypeCode, "currencyCode": r.CurrencyCode, "rate": r.Rate})
@@ -143,6 +157,7 @@ func New(db *database.DB) *master.Service[Charge, Input] {
 			Check: func(ctx context.Context, in *Input, stored *Charge, p record.Problems) (record.Problems, error) {
 				return check(ctx, db, in, stored, p)
 			},
+			Import: importSpec(db),
 		},
 		Repo: repo{db}, DB: db, Codes: codeprefix.Postgres{DB: db}, Events: outbox.Writer{DB: db},
 	}
@@ -151,7 +166,7 @@ func New(db *database.DB) *master.Service[Charge, Input] {
 func check(ctx context.Context, db *database.DB, in *Input, stored *Charge, p record.Problems) (record.Problems, error) {
 	kept := map[string]bool{}
 	if stored != nil {
-		for _, id := range []*string{stored.CurrencyID, stored.PpnTaxTypeID, stored.PphTaxTypeID} {
+		for _, id := range []*string{stored.CurrencyID, stored.PpnTaxTypeID, stored.PphTaxTypeID, stored.RevenueAccountID, stored.CostAccountID} {
 			if id != nil {
 				kept[*id] = true
 			}
@@ -199,6 +214,24 @@ func check(ctx context.Context, db *database.DB, in *Input, stored *Charge, p re
 			*t.dst = &r.ID
 		}
 	}
+	for _, a := range []struct {
+		code       *string
+		field, lbl string
+		types      []string
+		dst        **string
+	}{{in.RevenueAccountCode, "revenueAccountCode", "Akun pendapatan", coa.Revenue, &in.RevenueAccountID}, {in.CostAccountCode, "costAccountCode", "Akun beban", coa.Cost, &in.CostAccountID}} {
+		if err != nil || a.code == nil {
+			continue
+		}
+		var keep *string
+		if r, e := refs.Lookup(ctx, db, "account", *a.code); e == nil && kept[r.ID] {
+			keep = &r.ID
+		}
+		var r *refs.Ref
+		if r, err = coa.Pick(ctx, db, a.field, a.lbl, a.code, keep, a.types, &p); r != nil {
+			*a.dst = &r.ID
+		}
+	}
 	for i := range in.Rates {
 		x := &in.Rates[i]
 		if c := pick("container_type", record.RowField("rates", i, "containerTypeCode"), "Jenis kontainer", nonEmpty(x.ContainerTypeCode)); c != nil {
@@ -221,14 +254,15 @@ func nonEmpty(s string) *string {
 type repo struct{ db *database.DB }
 
 var sel = `SELECT ` + record.ColumnsAs("x") + `, x.charge_group, x.is_receivable, x.is_payable, x.basis, x.currency_id, c.code, x.default_rate::float8,
-	x.ppn_tax_type_id, n.code, x.pph_tax_type_id, h.code, x.account_code
+	x.ppn_tax_type_id, n.code, x.pph_tax_type_id, h.code, x.revenue_account_id, ra.code, x.cost_account_id, ca.code
 	FROM pm.charge_code x LEFT JOIN pm.currency c ON c.id = x.currency_id
+	LEFT JOIN pm.account ra ON ra.id = x.revenue_account_id LEFT JOIN pm.account ca ON ca.id = x.cost_account_id
 	LEFT JOIN pm.tax_type n ON n.id = x.ppn_tax_type_id LEFT JOIN pm.tax_type h ON h.id = x.pph_tax_type_id`
 
 func scan(row pgx.Row) (Charge, error) {
 	var x Charge
 	return x, x.Scan(row, &x.Group, &x.Receivable, &x.Payable, &x.Basis, &x.CurrencyID, &x.CurrencyCode, &x.DefaultRate,
-		&x.PpnTaxTypeID, &x.PpnTaxTypeCode, &x.PphTaxTypeID, &x.PphTaxTypeCode, &x.AccountCode)
+		&x.PpnTaxTypeID, &x.PpnTaxTypeCode, &x.PphTaxTypeID, &x.PphTaxTypeCode, &x.RevenueAccountID, &x.RevenueAccountCode, &x.CostAccountID, &x.CostAccountCode)
 }
 
 func (r repo) withRates(ctx context.Context, list []Charge) ([]Charge, error) {
@@ -303,10 +337,10 @@ func (r repo) saveRates(ctx context.Context, id string, rates []ContainerRate) e
 func (r repo) Insert(ctx context.Context, in Input, actor string) (Charge, error) {
 	var id string
 	if err := r.db.Q(ctx).QueryRow(ctx, `INSERT INTO pm.charge_code (code, name, description, is_active, valid_from, valid_to, created_by,
-		charge_group, is_receivable, is_payable, basis, currency_id, default_rate, ppn_tax_type_id, pph_tax_type_id, account_code)
-		VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
+		charge_group, is_receivable, is_payable, basis, currency_id, default_rate, ppn_tax_type_id, pph_tax_type_id, revenue_account_id, cost_account_id)
+		VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
 		in.Code, in.Name, in.Description, in.Active, in.ValidFrom, in.ValidTo, actor,
-		in.Group, in.Receivable, in.Payable, in.Basis, in.CurrencyID, in.DefaultRate, in.PpnID, in.PphID, in.Account).Scan(&id); err != nil {
+		in.Group, in.Receivable, in.Payable, in.Basis, in.CurrencyID, in.DefaultRate, in.PpnID, in.PphID, in.RevenueAccountID, in.CostAccountID).Scan(&id); err != nil {
 		return Charge{}, err
 	}
 	if err := r.saveRates(ctx, id, in.Rates); err != nil {
@@ -318,9 +352,9 @@ func (r repo) Insert(ctx context.Context, in Input, actor string) (Charge, error
 func (r repo) Update(ctx context.Context, id string, in Input, actor string) (Charge, error) {
 	if err := master.Exec(ctx, r.db, `UPDATE pm.charge_code SET name = $2, description = $3, is_active = $4, valid_from = $5::date, valid_to = $6::date,
 		charge_group = $7, is_receivable = $8, is_payable = $9, basis = $10, currency_id = $11, default_rate = $12, ppn_tax_type_id = $13,
-		pph_tax_type_id = $14, account_code = $15, updated_at = now(), updated_by = $16, version = version + 1 WHERE id = $1 AND NOT is_deleted`,
+		pph_tax_type_id = $14, revenue_account_id = $15, cost_account_id = $16, updated_at = now(), updated_by = $17, version = version + 1 WHERE id = $1 AND NOT is_deleted`,
 		id, in.Name, in.Description, in.Active, in.ValidFrom, in.ValidTo,
-		in.Group, in.Receivable, in.Payable, in.Basis, in.CurrencyID, in.DefaultRate, in.PpnID, in.PphID, in.Account, actor); err != nil {
+		in.Group, in.Receivable, in.Payable, in.Basis, in.CurrencyID, in.DefaultRate, in.PpnID, in.PphID, in.RevenueAccountID, in.CostAccountID, actor); err != nil {
 		return Charge{}, err
 	}
 	if err := r.saveRates(ctx, id, in.Rates); err != nil {

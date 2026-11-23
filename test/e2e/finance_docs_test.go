@@ -89,7 +89,7 @@ func TestFinanceDocsPositive(t *testing.T) {
 
 	t.Run("FP03 one charge code for both sides: rates per container type, PPN and PPh; sides and basis clear what no longer fits", func(t *testing.T) {
 		c := must(t, call(t, "POST", chBase, map[string]any{"name": "Ocean Freight", "group": "freight", "basis": "container", "currencyCode": r.usd,
-			"ppnTaxTypeCode": r.ppn, "pphTaxTypeCode": r.pph, "accountCode": "4101",
+			"ppnTaxTypeCode": r.ppn, "pphTaxTypeCode": r.pph,
 			"rates": []map[string]any{{"containerTypeCode": r.gp20, "currencyCode": r.usd, "rate": 650}, {"containerTypeCode": r.hc40, "currencyCode": r.usd, "rate": 1200.5}}}), 201)
 		if c.Obj["receivable"] != true || c.Obj["payable"] != true || len(rowsOf(c, "rates")) != 2 || rowsOf(c, "rates")[1]["rate"] != 1200.5 ||
 			c.str("ppnTaxTypeCode") != r.ppn || !genCodeOf("MKB").MatchString(c.str("code")) {

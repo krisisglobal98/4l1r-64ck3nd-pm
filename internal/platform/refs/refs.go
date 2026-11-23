@@ -50,6 +50,10 @@ type user struct {
 
 // usage lists, per master table, who points to its rows. A row in use is not deleted (deactivate it instead).
 var usage = map[string][]user{
+	"account": {
+		{"akun di bawahnya", `SELECT count(*) FROM pm.account WHERE parent_id = $1 AND NOT is_deleted`},
+		{"kode biaya", `SELECT count(*) FROM pm.charge_code WHERE (revenue_account_id = $1 OR cost_account_id = $1) AND NOT is_deleted`},
+	},
 	"org_level": {
 		{"unit", `SELECT count(*) FROM pm.org_unit WHERE org_level_id = $1 AND NOT is_deleted`},
 		{"jabatan", `SELECT count(*) FROM pm.jabatan WHERE org_level_id = $1 AND NOT is_deleted`},
@@ -94,6 +98,7 @@ var usage = map[string][]user{
 		{"kurs", `SELECT count(*) FROM pm.exchange_rate WHERE (from_currency_id = $1 OR to_currency_id = $1) AND NOT is_deleted`},
 		{"kode biaya", `SELECT count(DISTINCT x.id) FROM pm.charge_code x LEFT JOIN pm.charge_code_rate r ON r.charge_code_id = x.id WHERE (x.currency_id = $1 OR r.currency_id = $1) AND NOT x.is_deleted`},
 		{"rekening perusahaan", `SELECT count(*) FROM pm.company_bank_account WHERE currency_id = $1 AND NOT is_deleted`},
+		{"akun", `SELECT count(*) FROM pm.account WHERE currency_id = $1 AND NOT is_deleted`},
 	},
 	"country": {
 		{"kota", `SELECT count(*) FROM pm.city WHERE country_id = $1 AND NOT is_deleted`},

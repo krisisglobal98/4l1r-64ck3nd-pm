@@ -54,6 +54,8 @@ type Spec[T, I any] struct {
 	// transaction. For masters whose rows lock each other (a reporting line: A under B while B goes under A),
 	// one fixed lock order instead of row locks taken in opposite orders, which deadlock. Optional.
 	Serialize bool
+	// Import fills the master from an Excel workbook (template + upload). Optional: without it the upload is refused.
+	Import *Import
 }
 
 type Service[T, I any] struct {
@@ -252,12 +254,16 @@ func Routes[T, I any](mux *http.ServeMux, base string, s *Service[T, I]) {
 		}
 		return httpx.JSON(w, http.StatusCreated, t)
 	}))
-	mux.Handle("POST "+base+"/upload", httpx.Handler(func(w http.ResponseWriter, r *http.Request) error {
-		if _, err := access.Require(r.Context(), s.Spec.Menu, "upload"); err != nil {
-			return err
-		}
-		return apperr.NotImplemented("NO_IMPORT", fmt.Sprintf("Impor file %s belum tersedia.", s.Spec.Noun))
-	}))
+	if s.Spec.Import != nil {
+		importRoutes(mux, base, s)
+	} else {
+		mux.Handle("POST "+base+"/upload", httpx.Handler(func(w http.ResponseWriter, r *http.Request) error {
+			if _, err := access.Require(r.Context(), s.Spec.Menu, "upload"); err != nil {
+				return err
+			}
+			return apperr.NotImplemented("NO_IMPORT", fmt.Sprintf("Impor file %s belum tersedia.", s.Spec.Noun))
+		}))
+	}
 	mux.Handle("PUT "+base+"/{code}", httpx.Handler(func(w http.ResponseWriter, r *http.Request) error {
 		body, err := httpx.DecodeObject(r)
 		if err != nil {
