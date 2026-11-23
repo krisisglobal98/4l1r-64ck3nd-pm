@@ -17,6 +17,7 @@ import (
 	"alir.local/pm-service/internal/city"
 	"alir.local/pm-service/internal/commodity"
 	"alir.local/pm-service/internal/companyaccount"
+	"alir.local/pm-service/internal/companyprofile"
 	"alir.local/pm-service/internal/containertype"
 	"alir.local/pm-service/internal/country"
 	"alir.local/pm-service/internal/currency"
@@ -109,6 +110,8 @@ func run() error {
 	master.Routes(mux, "/pm/masters/education-levels", educationlevel.New(db))
 	master.Routes(mux, "/pm/masters/work-shifts", workshift.New(db))
 	master.Routes(mux, "/pm/masters/banks", bank.New(db))
+	master.Routes(mux, "/pm/masters/company-profiles", companyprofile.New(db))
+	companyprofile.PrintRoutes(mux, db)
 	// Keuangan & Pajak, Geografi & Lokasi (reference masters every module shares)
 	master.Routes(mux, "/pm/masters/currencies", currency.New(db))
 	master.Routes(mux, "/pm/masters/countries", country.New(db))

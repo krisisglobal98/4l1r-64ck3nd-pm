@@ -87,7 +87,7 @@ func reset() {
 		`DELETE FROM pm.position`,
 		`UPDATE pm.unit_type SET head_jabatan_id = NULL`,
 		`DELETE FROM pm.jabatan`, `DELETE FROM pm.grade`,
-		`DELETE FROM pm.exchange_rate`, `DELETE FROM pm.charge_code_rate`, `DELETE FROM pm.charge_code`, `DELETE FROM pm.company_bank_account`,
+		`DELETE FROM pm.exchange_rate`, `DELETE FROM pm.charge_code_rate`, `DELETE FROM pm.charge_code`, `DELETE FROM pm.company_bank_account`, `DELETE FROM pm.company_profile`,
 		`DELETE FROM pm.business_partner_address`, `DELETE FROM pm.business_partner_contact`, `DELETE FROM pm.business_partner_bank_account`,
 		`DELETE FROM pm.business_partner`, `DELETE FROM pm.sales_person`,
 		`DELETE FROM pm.employee`, `DELETE FROM pm.employment_status`, `DELETE FROM pm.education_level`, `DELETE FROM pm.work_shift`, `DELETE FROM pm.bank`,
