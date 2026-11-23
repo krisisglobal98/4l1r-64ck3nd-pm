@@ -281,6 +281,8 @@ func seedDocuments(ctx context.Context, db *database.DB) error {
 // the owning service keeps the counter.
 var Numberings = []struct{ DocType, Name, Module, Pattern, Reset string }{
 	{"FF.JOB", "Job Freight Forwarding", "freight-forwarding", "{SEQ:4}/{MM}/{YY}", "monthly"},
+	{"FF.INV", "Invoice Freight Forwarding", "freight-forwarding", "INV/{SEQ:4}/{MM}/{YY}", "monthly"},
+	{"FF.RMB", "Invoice Reimbursement Freight Forwarding", "freight-forwarding", "RMB/{SEQ:4}/{MM}/{YY}", "monthly"},
 }
 
 // seedNumbering adds the standard patterns whose document type the tenant has none of yet.
