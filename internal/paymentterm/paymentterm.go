@@ -57,7 +57,7 @@ func values(x PaymentTerm) record.Values {
 func New(db *database.DB) *master.Service[PaymentTerm, Input] {
 	return &master.Service[PaymentTerm, Input]{
 		Spec: master.Spec[PaymentTerm, Input]{
-			Menu: "pm.paymentTerm", Table: "payment_term", Noun: "Syarat pembayaran",
+			Menu: "pm.paymentTerm", Table: "payment_term", Noun: "Syarat pembayaran", Import: importSpec(db),
 			Base: func(x *PaymentTerm) *record.Base { return &x.Base }, Values: values, Parse: Parse,
 			SetCode: func(in *Input, c string) { in.Code = c },
 		},

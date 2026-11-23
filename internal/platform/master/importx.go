@@ -27,10 +27,17 @@ type Import struct {
 	Columns []ImportColumn
 	// Lists are the reference sheets of the template (kelompok, mata uang, akun, …).
 	Lists func(ctx context.Context) ([]ImportList, error)
-	// UniqueName rejects a row whose name another record already has (or another row of the same file): nothing is
-	// added; the problem tells the user to fill Kode with the existing code to change that record, or to rename.
-	UniqueName bool
+	// Unique are the columns no two records share (a name, an ISO code, an account number). A row repeating a stored
+	// record's value (any case) is never added: the problem names that record's code, and the user chooses to fill
+	// Kode with it (the row then changes that record) or to fix the file. Two rows of one file may not share it either.
+	Unique []ImportUnique
+	// Describe names a row in the outcome from its cells' text (by key) when it has no name of its own (a rate's name
+	// is made by the system).
+	Describe func(cells map[string]string) string
 }
+
+// ImportUnique is a unique column: the form value Key, stored in the table column Column.
+type ImportUnique struct{ Key, Column string }
 
 type ImportColumn struct {
 	Header   string // as in the template's header row ("*" is added when Required)
@@ -43,6 +50,10 @@ type ImportColumn struct {
 	Choices []string
 	// Convert turns the cell text into the form value; a non-empty problem rejects the cell. Nil keeps the text.
 	Convert func(ctx context.Context, cell string) (value any, problem string, err error)
+	// Date formats the template column as a date and reads it with Date (when Convert is nil).
+	Date bool
+	// Text formats the template column as text, so Excel keeps leading zeros (clearing codes, account numbers).
+	Text bool
 }
 
 type ImportList struct {
@@ -128,6 +139,17 @@ func (s *Service[T, I]) template(ctx context.Context) (*excelize.File, error) {
 			w = 18
 		}
 		_ = f.SetColWidth(dataSheet, col, col, w)
+		if c.Text {
+			if st, err := f.NewStyle(&excelize.Style{NumFmt: 49}); err == nil {
+				_ = f.SetColStyle(dataSheet, col, st)
+			}
+		}
+		if c.Date {
+			fmtCode := "yyyy-mm-dd"
+			if st, err := f.NewStyle(&excelize.Style{CustomNumFmt: &fmtCode}); err == nil {
+				_ = f.SetColStyle(dataSheet, col, st)
+			}
+		}
 		if len(c.Choices) > 0 {
 			dv := excelize.NewDataValidation(true)
 			dv.Sqref = fmt.Sprintf("%s2:%s%d", col, col, maxRows+1)
@@ -214,7 +236,8 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 	if idx, _ := f.GetSheetIndex(dataSheet); idx < 0 {
 		sheet = f.GetSheetName(0)
 	}
-	rows, err := f.GetRows(sheet)
+	// Raw values: a date cell is its serial number (read by Date), a number has no display formatting.
+	rows, err := f.GetRows(sheet, excelize.Options{RawCellValue: true})
 	if err != nil || len(rows) == 0 {
 		return res, apperr.Validation([]apperr.Problem{{Field: "file", Message: "Sheet Data kosong; isi di bawah baris judul kolom."}})
 	}
@@ -245,7 +268,10 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 	for _, c := range im.Columns {
 		headerOf[c.Key] = c.Header
 	}
-	seen := map[string]int{} // name (lower) → the file row that has it
+	if _, ok := headerOf["code"]; !ok {
+		headerOf["code"] = "Kode"
+	}
+	seen := map[string]int{} // unique key + value (lower) → the file row that has it
 	err = s.DB.InTx(ctx, func(ctx context.Context) error {
 		for n, cells := range rows[1:] {
 			empty := true
@@ -257,6 +283,7 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 			}
 			out := ImportRow{Row: n + 2, Problems: []apperr.Problem{}}
 			v := record.Values{}
+			raw := map[string]string{}
 			code := ""
 			for i, cell := range cells {
 				c, ok := at[i]
@@ -264,13 +291,18 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 				if !ok || cell == "" {
 					continue
 				}
+				raw[c.Key] = cell
 				if c.Key == "code" {
 					code = cell
 					continue
 				}
 				var val any = cell
-				if c.Convert != nil {
-					x, problem, err := c.Convert(ctx, cell)
+				conv := c.Convert
+				if conv == nil && c.Date {
+					conv = Date
+				}
+				if conv != nil {
+					x, problem, err := conv(ctx, cell)
 					if err != nil {
 						return err
 					}
@@ -281,18 +313,25 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 					val = x
 				}
 				v[c.Key] = val
+				if d, ok := val.(string); ok && c.Date {
+					raw[c.Key] = d // the date as read, not the cell's serial number
+				}
 			}
 			out.Action = "create"
 			if code != "" {
 				out.Action, out.Code = "update", code
 			}
-			if name, ok := v["name"].(string); ok && im.UniqueName {
-				problem, err := s.duplicateName(ctx, name, code, out.Row, seen)
+			for _, un := range im.Unique {
+				val, ok := v[un.Key].(string)
+				if !ok {
+					continue
+				}
+				problem, err := s.duplicate(ctx, un, headerOf[un.Key], val, code, out.Row, seen)
 				if err != nil {
 					return err
 				}
 				if problem != "" {
-					out.Problems = append(out.Problems, apperr.Problem{Field: headerOf["name"], Message: problem})
+					out.Problems = append(out.Problems, apperr.Problem{Field: headerOf[un.Key], Message: problem})
 				}
 			}
 			if len(out.Problems) == 0 {
@@ -335,6 +374,8 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 			if out.Name == "" {
 				if s, ok := v["name"].(string); ok {
 					out.Name = s
+				} else if im.Describe != nil {
+					out.Name = im.Describe(raw)
 				}
 			}
 			if len(out.Problems) > 0 {
@@ -367,32 +408,33 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 	return res, nil
 }
 
-// duplicateName is the problem of a row whose name is taken: by a stored record (other than the row's own, when it
-// has a code), or by an earlier row of the file. A row joins seen only when its name passes, so a rejected row does
+// duplicate is the problem of a row whose unique value is taken: by a stored record (other than the row's own, when
+// it has a code), or by an earlier row of the file. A row joins seen only when its value passes, so a rejected row does
 // not block the rows after it; rows saved earlier in the transaction are caught by seen, so a stored code it names
 // always exists.
-func (s *Service[T, I]) duplicateName(ctx context.Context, name, code string, row int, seen map[string]int) (string, error) {
-	key := strings.ToLower(strings.TrimSpace(name))
+func (s *Service[T, I]) duplicate(ctx context.Context, un ImportUnique, header, value, code string, row int, seen map[string]int) (string, error) {
+	key := strings.ToLower(strings.TrimSpace(value))
 	if key == "" {
 		return "", nil
 	}
-	if r, ok := seen[key]; ok {
-		return fmt.Sprintf("Nama \"%s\" sama dengan baris %d di file ini. Satukan kedua baris atau ganti salah satu nama.", name, r), nil
+	if r, ok := seen[un.Key+"\x00"+key]; ok {
+		return fmt.Sprintf("%s \"%s\" sama dengan baris %d di file ini. Satukan kedua baris atau ganti salah satu.", header, value, r), nil
 	}
 	var other string
-	err := s.DB.Q(ctx).QueryRow(ctx, `SELECT code FROM pm.`+s.Spec.Table+` WHERE lower(btrim(name)) = $1 AND NOT is_deleted AND lower(code) <> lower($2)
+	err := s.DB.Q(ctx).QueryRow(ctx, `SELECT code FROM pm.`+s.Spec.Table+` WHERE lower(btrim(`+un.Column+`)) = $1 AND NOT is_deleted AND lower(code) <> lower($2)
 		ORDER BY code LIMIT 1`, key, code).Scan(&other)
+	noun := strings.ToLower(s.Spec.Noun)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		seen[key] = row
+		seen[un.Key+"\x00"+key] = row
 		return "", nil
 	case err != nil:
 		return "", err
 	case code == "":
-		return fmt.Sprintf("Nama \"%s\" sudah ada pada %s %s; baris ini tidak ditambahkan. Untuk mengubah data itu dengan isi file, isi kolom Kode dengan %s. Bila ini data lain, ganti namanya lalu upload ulang.",
-			name, strings.ToLower(s.Spec.Noun), other, other), nil
+		return fmt.Sprintf("%s \"%s\" sudah ada pada %s %s; baris ini tidak ditambahkan. Untuk mengubah data itu dengan isi file, isi kolom Kode dengan %s. Bila ini data lain, ganti %s lalu upload ulang.",
+			header, value, noun, other, other, strings.ToLower(header)), nil
 	}
-	return fmt.Sprintf("Nama \"%s\" sudah dipakai %s %s. Ganti namanya lalu upload ulang.", name, strings.ToLower(s.Spec.Noun), other), nil
+	return fmt.Sprintf("%s \"%s\" sudah dipakai %s %s. Ganti %s lalu upload ulang.", header, value, noun, other, strings.ToLower(header)), nil
 }
 
 // importRoutes registers GET {base}/template.xlsx and POST {base}/upload?commit=true (the workbook as the body).

@@ -203,13 +203,18 @@ the JSON (see `migrations/000001_org_level.up.sql` and `internal/platform/record
   (a header of the same type), `currencyCode` (foreign-currency accounts). **Kode Biaya** points to
   `revenueAccountCode` (when receivable: Pendapatan / Pendapatan Lain-lain) and `costAccountCode` (when payable: HPP /
   Beban / Beban Lain-lain), detail accounts only.
-- **Excel import** (masters with `Spec.Import`; Kode Biaya now): `GET /{master}/template.xlsx` — sheets Data (header
+- **Excel import** (masters with `Spec.Import`; all Keuangan & Pajak masters: Kode Biaya, Mata Uang, Kurs, Bank,
+  Rekening Bank Perusahaan, Bagan Akun, Syarat Pembayaran, Jenis Pajak — each in its package's `import.go`, built from
+  `master.CodeColumn` / `NameColumn` / `ValidityColumns` / `TailColumns` and the converters `Lookup`, `Number`,
+  `Integer`, `Date`, `YesNo`, `ByLabel`; cells are read raw, so an Excel date cell and DD/MM/YYYY text both read, and
+  `Text` columns keep leading zeros): `GET /{master}/template.xlsx` — sheets Data (header
   row, drop-downs), Petunjuk (each column), and reference sheets (Mata Uang, Pajak, Akun); `POST /{master}/upload`
   (the .xlsx as the body, ≤ 5 MB, ≤ 2000 rows) checks every row through the form's own create/update in one
   transaction and answers `{rows[{row, action, code, name, problems}], added, updated, failed, committed}`;
-  `?commit=true` keeps it only when no row fails (a row with a Kode changes only its filled cells). With `Import.UniqueName`
-  (Kode Biaya) a row whose name another record or an earlier row of the file already has (any case) is never added:
-  the row fails with the existing code, and the user chooses to fill Kode with it (update) or rename and upload again.
+  `?commit=true` keeps it only when no row fails (a row with a Kode changes only its filled cells). With `Import.Unique`
+  (names; Mata Uang also the ISO code, Bank the SWIFT, Bagan Akun only the account number) a row whose value another
+  record or an earlier row of the file already has (any case) is never added: the row fails with the existing code,
+  and the user chooses to fill Kode with it (update) or fix the file and upload again.
   Masters without an import answer 501 `NO_IMPORT`.
 - **System Parameter** (`/system-parameters`, menu `pm.systemParameter`): named values the modules read by `key`
   (capitals, digits, underscores; unique, never changed), `value`, `module`; known keys are checked

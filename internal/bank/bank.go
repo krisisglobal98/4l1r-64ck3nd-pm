@@ -71,7 +71,7 @@ func values(x Bank) record.Values {
 func New(db *database.DB) *master.Service[Bank, Input] {
 	return &master.Service[Bank, Input]{
 		Spec: master.Spec[Bank, Input]{
-			Menu: "pm.bank", Table: "bank", Noun: "Bank",
+			Menu: "pm.bank", Table: "bank", Noun: "Bank", Import: importSpec(db),
 			Base: func(x *Bank) *record.Base { return &x.Base }, Values: values, Parse: Parse,
 			SetCode: func(in *Input, c string) { in.Code = c },
 			Check: func(ctx context.Context, in *Input, stored *Bank, p record.Problems) (record.Problems, error) {

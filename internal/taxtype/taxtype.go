@@ -80,7 +80,7 @@ func values(x TaxType) record.Values {
 func New(db *database.DB) *master.Service[TaxType, Input] {
 	return &master.Service[TaxType, Input]{
 		Spec: master.Spec[TaxType, Input]{
-			Menu: "pm.taxType", Table: "tax_type", Noun: "Jenis pajak",
+			Menu: "pm.taxType", Table: "tax_type", Noun: "Jenis pajak", Import: importSpec(db),
 			Base: func(x *TaxType) *record.Base { return &x.Base }, Values: values, Parse: Parse,
 			SetCode: func(in *Input, c string) { in.Code = c },
 		},
