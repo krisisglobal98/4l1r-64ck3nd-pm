@@ -51,7 +51,7 @@ Contract: `api/openapi.yaml`.
 | GET, PUT, DELETE | `/pm/masters/unit-types/{code}` | as levels; DELETE 409 while units use the type |
 | GET, POST | `/pm/masters/org-units` | units with `levelCode`, `parentCode`, `unitTypeCode` (and their ids); codes MUO001, … |
 | GET, PUT, DELETE | `/pm/masters/org-units/{code}` | as levels; DELETE 409 while it is used |
-| GET, POST, GET/PUT/DELETE `/{code}` | `/pm/masters/grades`, `/jabatan`, `/positions`, `/approval-rules`, `/delegations`, `/custom-flows`, `/employees`, `/employment-status`, `/education-levels`, `/work-shifts`, `/banks`, `/currencies`, `/countries`, `/cities`, `/payment-terms`, `/tax-types`, `/sales-persons`, `/business-partners`, `/ports`, `/incoterms`, `/containers`, `/packagings`, `/uoms`, `/commodities`, `/service-types`, `/exchange-rates`, `/charges`, `/company-bank-accounts`, `/company-profiles`, `/document-types` | the same contract; relations by code (`gradeCode`, `levelCode`, `unitCode`, `jabatanCode`, `reportsToCode`, `positionCode`, `ruleCodes`, `ruleCode`, `scopeUnitCode`, `stepCodes`) |
+| GET, POST, GET/PUT/DELETE `/{code}` | `/pm/masters/grades`, `/jabatan`, `/positions`, `/approval-rules`, `/delegations`, `/custom-flows`, `/employees`, `/employment-status`, `/education-levels`, `/work-shifts`, `/banks`, `/currencies`, `/countries`, `/cities`, `/payment-terms`, `/tax-types`, `/sales-persons`, `/business-partners`, `/ports`, `/incoterms`, `/containers`, `/packagings`, `/uoms`, `/commodities`, `/service-types`, `/exchange-rates`, `/charges`, `/company-bank-accounts`, `/company-profiles`, `/system-parameters`, `/document-types` | the same contract; relations by code (`gradeCode`, `levelCode`, `unitCode`, `jabatanCode`, `reportsToCode`, `positionCode`, `ruleCodes`, `ruleCode`, `scopeUnitCode`, `stepCodes`) |
 | GET | `/healthz`, `/readyz` | process up; database reachable |
 
 Errors are `{code, message, details?}` with Indonesian messages, the shape the ALIR API client reads, also for an
@@ -198,6 +198,9 @@ the JSON (see `migrations/000001_org_level.up.sql` and `internal/platform/record
 - **Kode Biaya:** one code for both sides (`receivable` billed to customers, `payable` paid to vendors; at least one).
   PPN (added) only with receivable, PPh (withheld) only with payable, otherwise cleared; `rates` per container type
   and currency only for basis `container`; a default rate needs a currency except basis `percent` (≤ 100).
+- **System Parameter** (`/system-parameters`, menu `pm.systemParameter`): named values the modules read by `key`
+  (capitals, digits, underscores; unique, never changed), `value`, `module`; known keys are checked
+  (`INVOICE_DEFAULT_DUE_DAYS`: 0–365). `GET /pm/parameters/{key}` answers the active one, open to every signed-in user.
 - **Profil Perusahaan** (`/company-profiles`, menu `pm.orgUnit`): legal and trade name, NPWP (16 digits; 15 accepted),
   address, city, country, phone, fax, email, website and a logo (data URL: PNG, JPEG, SVG or WebP, about 400 KB at most);
   one per company unit or one for the tenant, and one marked `printDefault`. `GET /pm/company-profile/print?unit=` is
