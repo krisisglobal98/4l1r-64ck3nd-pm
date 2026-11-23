@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/xuri/excelize/v2"
 
 	"alir.local/pm-service/internal/platform/access"
@@ -26,6 +27,9 @@ type Import struct {
 	Columns []ImportColumn
 	// Lists are the reference sheets of the template (kelompok, mata uang, akun, …).
 	Lists func(ctx context.Context) ([]ImportList, error)
+	// UniqueName rejects a row whose name another record already has (or another row of the same file): nothing is
+	// added; the problem tells the user to fill Kode with the existing code to change that record, or to rename.
+	UniqueName bool
 }
 
 type ImportColumn struct {
@@ -241,6 +245,7 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 	for _, c := range im.Columns {
 		headerOf[c.Key] = c.Header
 	}
+	seen := map[string]int{} // name (lower) → the file row that has it
 	err = s.DB.InTx(ctx, func(ctx context.Context) error {
 		for n, cells := range rows[1:] {
 			empty := true
@@ -280,6 +285,15 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 			out.Action = "create"
 			if code != "" {
 				out.Action, out.Code = "update", code
+			}
+			if name, ok := v["name"].(string); ok && im.UniqueName {
+				problem, err := s.duplicateName(ctx, name, code, out.Row, seen)
+				if err != nil {
+					return err
+				}
+				if problem != "" {
+					out.Problems = append(out.Problems, apperr.Problem{Field: headerOf["name"], Message: problem})
+				}
 			}
 			if len(out.Problems) == 0 {
 				err := s.DB.Savepoint(ctx, func(ctx context.Context) error {
@@ -348,6 +362,34 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 	}
 	res.Committed = true
 	return res, nil
+}
+
+// duplicateName is the problem of a row whose name is taken: by a stored record (other than the row's own, when it
+// has a code), or by an earlier row of the file. A row joins seen only when its name passes, so a rejected row does
+// not block the rows after it; rows saved earlier in the transaction are caught by seen, so a stored code it names
+// always exists.
+func (s *Service[T, I]) duplicateName(ctx context.Context, name, code string, row int, seen map[string]int) (string, error) {
+	key := strings.ToLower(strings.TrimSpace(name))
+	if key == "" {
+		return "", nil
+	}
+	if r, ok := seen[key]; ok {
+		return fmt.Sprintf("Nama \"%s\" sama dengan baris %d di file ini. Satukan kedua baris atau ganti salah satu nama.", name, r), nil
+	}
+	var other string
+	err := s.DB.Q(ctx).QueryRow(ctx, `SELECT code FROM pm.`+s.Spec.Table+` WHERE lower(btrim(name)) = $1 AND NOT is_deleted AND lower(code) <> lower($2)
+		ORDER BY code LIMIT 1`, key, code).Scan(&other)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		seen[key] = row
+		return "", nil
+	case err != nil:
+		return "", err
+	case code == "":
+		return fmt.Sprintf("Nama \"%s\" sudah ada pada %s %s; baris ini tidak ditambahkan. Untuk mengubah data itu dengan isi file, isi kolom Kode dengan %s. Bila ini data lain, ganti namanya lalu upload ulang.",
+			name, strings.ToLower(s.Spec.Noun), other, other), nil
+	}
+	return fmt.Sprintf("Nama \"%s\" sudah dipakai %s %s. Ganti namanya lalu upload ulang.", name, strings.ToLower(s.Spec.Noun), other), nil
 }
 
 // importRoutes registers GET {base}/template.xlsx and POST {base}/upload?commit=true (the workbook as the body).

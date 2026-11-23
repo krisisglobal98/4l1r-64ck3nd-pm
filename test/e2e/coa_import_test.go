@@ -143,6 +143,65 @@ func TestChargeImport(t *testing.T) {
 		}
 	})
 
+	t.Run("CI04 a name already there is not added: the preview names its code", func(t *testing.T) {
+		list := must(t, call(t, "GET", chBase, nil), 200).List
+		codeOf := map[string]string{}
+		for _, x := range list {
+			codeOf[x["name"].(string)] = x["code"].(string)
+		}
+		lift, bl := codeOf["Lift On"], codeOf["Biaya B/L"]
+		if lift == "" || bl == "" {
+			t.Fatalf("CI02 data missing: %v", codeOf)
+		}
+		problem := func(r map[string]any) string {
+			ps := r["problems"].([]any)
+			if len(ps) == 0 {
+				return ""
+			}
+			p := ps[0].(map[string]any)
+			return p["field"].(string) + ": " + p["message"].(string)
+		}
+		f := workbook(t, [][]any{head,
+			{"", " lift on ", "origin", "Ya", "Ya", "container"}, // stored name, other case → not added
+			{"", "Biaya Baru", "Lainnya", "Ya", "Tidak", "shipment"},
+			{"", "BIAYA BARU", "Lainnya", "Ya", "Tidak", "shipment"}, // same as the row above
+			{bl, "Lift On"}, // renaming onto another record
+			{lift, "Lift On", "", "", "", "", "IDR", "1250"}, // its own name: fine
+		})
+		x := must(t, call(t, "POST", chBase+"/upload?commit=true", f), 200)
+		rows := x.Obj["rows"].([]any)
+		if x.Obj["committed"] != false || x.Obj["failed"] != 3.0 || len(rows) != 5 {
+			t.Fatalf("result %s", trunc(x.Raw))
+		}
+		r := func(i int) map[string]any { return rows[i].(map[string]any) }
+		if p := problem(r(0)); !strings.HasPrefix(p, "Nama Biaya:") || !strings.Contains(p, lift) || !strings.Contains(p, "isi kolom Kode") {
+			t.Errorf("stored name: %q", p)
+		}
+		if p := problem(r(1)); p != "" {
+			t.Errorf("new name: %q", p)
+		}
+		if p := problem(r(2)); !strings.Contains(p, "baris 3") {
+			t.Errorf("same name in the file: %q", p)
+		}
+		if p := problem(r(3)); !strings.Contains(p, "sudah dipakai") || !strings.Contains(p, lift) {
+			t.Errorf("rename onto another: %q", p)
+		}
+		if p := problem(r(4)); p != "" {
+			t.Errorf("own name: %q", p)
+		}
+		if n := len(must(t, call(t, "GET", chBase, nil), 200).List); n != len(list) {
+			t.Errorf("nothing saved: %d → %d", len(list), n)
+		}
+		// The user's choice: fill Kode to change the stored record with the file's row.
+		fix := workbook(t, [][]any{head, {lift, "Lift On", "origin", "Ya", "Ya", "container", "IDR", "1300"}})
+		if c := must(t, call(t, "POST", chBase+"/upload?commit=true", fix), 200); c.Obj["committed"] != true || c.Obj["updated"] != 1.0 {
+			t.Errorf("update by code %s", trunc(c.Raw))
+		}
+		if g := must(t, call(t, "GET", chBase+"/"+lift, nil), 200); g.Obj["defaultRate"] != 1300.0 {
+			t.Errorf("rate %s", trunc(g.Raw))
+		}
+	})
+
 	t.Run("CI03 not a workbook, a missing required column", func(t *testing.T) {
 		if x := call(t, "POST", chBase+"/upload", "nama,kelompok\nx,y"); !want(t, x, 422) || x.problem("file") == "" {
 			t.Errorf("csv %s", trunc(x.Raw))

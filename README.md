@@ -207,8 +207,10 @@ the JSON (see `migrations/000001_org_level.up.sql` and `internal/platform/record
   row, drop-downs), Petunjuk (each column), and reference sheets (Mata Uang, Pajak, Akun); `POST /{master}/upload`
   (the .xlsx as the body, ≤ 5 MB, ≤ 2000 rows) checks every row through the form's own create/update in one
   transaction and answers `{rows[{row, action, code, name, problems}], added, updated, failed, committed}`;
-  `?commit=true` keeps it only when no row fails (a row with a Kode changes only its filled cells). Masters without
-  an import answer 501 `NO_IMPORT`.
+  `?commit=true` keeps it only when no row fails (a row with a Kode changes only its filled cells). With `Import.UniqueName`
+  (Kode Biaya) a row whose name another record or an earlier row of the file already has (any case) is never added:
+  the row fails with the existing code, and the user chooses to fill Kode with it (update) or rename and upload again.
+  Masters without an import answer 501 `NO_IMPORT`.
 - **System Parameter** (`/system-parameters`, menu `pm.systemParameter`): named values the modules read by `key`
   (capitals, digits, underscores; unique, never changed), `value`, `module`; known keys are checked
   (`INVOICE_DEFAULT_DUE_DAYS`: 0–365). `GET /pm/parameters/{key}` answers the active one, open to every signed-in user.

@@ -57,8 +57,9 @@ func number(_ context.Context, s string) (any, string, error) {
 // importSpec is the Excel import of Kode Biaya: the columns of the template and the reference sheets.
 func importSpec(db *database.DB) *master.Import {
 	return &master.Import{
+		UniqueName: true,
 		Columns: []master.ImportColumn{
-			{Header: "Kode", Key: "code", Hint: "Kosongkan untuk kode biaya baru (kode dibuat sistem). Isi kode yang ada untuk mengubahnya.", Example: "MKB001", Width: 12},
+			{Header: "Kode", Key: "code", Hint: "Kosongkan untuk kode biaya baru (kode dibuat sistem). Isi kode yang ada untuk mengubahnya. Nama biaya yang sudah ada tidak ditambahkan lagi: isi kodenya untuk mengubah data itu, atau ganti namanya.", Example: "MKB001", Width: 12},
 			{Header: "Nama Biaya", Key: "name", Required: true, Hint: "Nama jenis biaya, maks. 80 karakter.", Example: "Ocean Freight", Width: 28},
 			{Header: "Kelompok", Key: "group", Required: true, Choices: labels(Groups, GroupLabels), Convert: master.ByLabel(GroupLabels), Example: "Freight", Width: 22},
 			{Header: "Ditagihkan ke Customer", Key: "receivable", Required: true, Choices: []string{"Ya", "Tidak"}, Convert: master.YesNo, Hint: "Ya bila biaya ini dijual / ditagih ke customer (receivable).", Example: "Ya", Width: 14},
