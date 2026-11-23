@@ -16,7 +16,7 @@ func TestNumbering(t *testing.T) {
 		if l.str("pattern") != "{SEQ:4}/{MM}/{YY}" || l.str("reset") != "monthly" || l.str("docType") != "FF.JOB" {
 			t.Fatalf("seed %s", trunc(l.Raw))
 		}
-		for doc, pattern := range map[string]string{"FF.INV": "INV/{SEQ:4}/{MM}/{YY}", "FF.RMB": "RMB/{SEQ:4}/{MM}/{YY}"} {
+		for doc, pattern := range map[string]string{"FF.INV": "INV/{SEQ:4}/{MM}/{YY}", "FF.RMB": "RMB/{SEQ:4}/{MM}/{YY}", "FF.VB": "VB/{SEQ:4}/{MM}/{YY}", "FF.RCV": "RCV/{SEQ:4}/{MM}/{YY}", "FF.PAY": "PAY/{SEQ:4}/{MM}/{YY}"} {
 			if x := must(t, call(t, "GET", "/pm/numbering/"+doc+"?date=2026-11-20", nil), 200); x.str("pattern") != pattern {
 				t.Errorf("seed %s: %s", doc, trunc(x.Raw))
 			}

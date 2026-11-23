@@ -283,6 +283,9 @@ var Numberings = []struct{ DocType, Name, Module, Pattern, Reset string }{
 	{"FF.JOB", "Job Freight Forwarding", "freight-forwarding", "{SEQ:4}/{MM}/{YY}", "monthly"},
 	{"FF.INV", "Invoice Freight Forwarding", "freight-forwarding", "INV/{SEQ:4}/{MM}/{YY}", "monthly"},
 	{"FF.RMB", "Invoice Reimbursement Freight Forwarding", "freight-forwarding", "RMB/{SEQ:4}/{MM}/{YY}", "monthly"},
+	{"FF.VB", "Vendor Bill Freight Forwarding", "freight-forwarding", "VB/{SEQ:4}/{MM}/{YY}", "monthly"},
+	{"FF.RCV", "Penerimaan Pembayaran Freight Forwarding", "freight-forwarding", "RCV/{SEQ:4}/{MM}/{YY}", "monthly"},
+	{"FF.PAY", "Pembayaran Vendor Freight Forwarding", "freight-forwarding", "PAY/{SEQ:4}/{MM}/{YY}", "monthly"},
 }
 
 // seedNumbering adds the standard patterns whose document type the tenant has none of yet.
