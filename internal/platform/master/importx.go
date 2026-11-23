@@ -314,7 +314,8 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 				switch {
 				case err == nil:
 				case errors.As(err, &ae):
-					if ps, ok := ae.Details.(map[string]any)["problems"].([]apperr.Problem); ok {
+					details, _ := ae.Details.(map[string]any)
+					if ps, ok := details["problems"].([]apperr.Problem); ok {
 						for _, p := range ps {
 							field := headerOf[strings.SplitN(p.Field, ".", 2)[0]]
 							if field == "" {
@@ -322,8 +323,10 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 							}
 							out.Problems = append(out.Problems, apperr.Problem{Field: field, Message: p.Message})
 						}
+					} else if ae.Status == http.StatusNotFound && code != "" {
+						out.Problems = append(out.Problems, apperr.Problem{Field: headerOf["code"], Message: fmt.Sprintf("%s %s tidak ditemukan. Kosongkan kolom Kode untuk data baru, atau periksa kodenya.", s.Spec.Noun, code)})
 					} else {
-						out.Problems = append(out.Problems, apperr.Problem{Field: "Kode", Message: ae.Message})
+						out.Problems = append(out.Problems, apperr.Problem{Field: headerOf["code"], Message: ae.Message})
 					}
 				default:
 					return err

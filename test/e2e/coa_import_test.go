@@ -202,6 +202,19 @@ func TestChargeImport(t *testing.T) {
 		}
 	})
 
+	t.Run("CI05 a Kode that does not exist is a row problem, not a server error", func(t *testing.T) {
+		f := workbook(t, [][]any{head, {"MKB999", "Biaya Tidak Ada"}, {"", "Biaya Lain", "Lainnya", "Ya", "Tidak", "shipment"}})
+		x := must(t, call(t, "POST", chBase+"/upload", f), 200)
+		rows := x.Obj["rows"].([]any)
+		if x.Obj["failed"] != 1.0 || x.Obj["added"] != 1.0 || len(rows) != 2 {
+			t.Fatalf("result %s", trunc(x.Raw))
+		}
+		p := rows[0].(map[string]any)["problems"].([]any)[0].(map[string]any)
+		if p["field"] != "Kode" || !strings.Contains(p["message"].(string), "MKB999 tidak ditemukan") {
+			t.Errorf("problem %v", p)
+		}
+	})
+
 	t.Run("CI03 not a workbook, a missing required column", func(t *testing.T) {
 		if x := call(t, "POST", chBase+"/upload", "nama,kelompok\nx,y"); !want(t, x, 422) || x.problem("file") == "" {
 			t.Errorf("csv %s", trunc(x.Raw))
