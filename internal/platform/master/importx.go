@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -31,6 +32,12 @@ type Import struct {
 	// record's value (any case) is never added: the problem names that record's code, and the user chooses to fill
 	// Kode with it (the row then changes that record) or to fix the file. Two rows of one file may not share it either.
 	Unique []ImportUnique
+	// Assemble turns the row's flat values into the form's shape before the save (columns of a primary address into
+	// the address list). stored is the record the row changes, as form values (nil for a new record).
+	Assemble func(v, stored record.Values) record.Values
+	// Alias names the column of a form field that is not a column itself, e.g. "addresses.*.postalCode" → "Kode Pos"
+	// ("*" stands for a list row).
+	Alias map[string]string
 	// Describe names a row in the outcome from its cells' text (by key) when it has no name of its own (a rate's name
 	// is made by the system).
 	Describe func(cells map[string]string) string
@@ -222,7 +229,10 @@ func (s *Service[T, I]) template(ctx context.Context) (*excelize.File, error) {
 	return f, nil
 }
 
-var errPreview = errors.New("import preview: roll back")
+var (
+	errPreview = errors.New("import preview: roll back")
+	rowIndex   = regexp.MustCompile(`\.[0-9]+\.`)
+)
 
 // importFile reads the workbook and runs every row through Create/Update in one transaction: kept only when commit
 // and no row failed, rolled back otherwise (a preview).
@@ -340,6 +350,15 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 					out.Problems = append(out.Problems, apperr.Problem{Field: headerOf[un.Key], Message: problem})
 				}
 			}
+			if len(out.Problems) == 0 && im.Assemble != nil {
+				var stored record.Values
+				if code != "" {
+					if t, err := s.Repo.Get(ctx, code, false); err == nil {
+						stored = s.Spec.Values(t)
+					}
+				}
+				v = im.Assemble(v, stored)
+			}
 			if len(out.Problems) == 0 {
 				err := s.DB.Savepoint(ctx, func(ctx context.Context) error {
 					var t T
@@ -362,7 +381,13 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 					details, _ := ae.Details.(map[string]any)
 					if ps, ok := details["problems"].([]apperr.Problem); ok {
 						for _, p := range ps {
-							field := headerOf[strings.SplitN(p.Field, ".", 2)[0]]
+							field := im.Alias[rowIndex.ReplaceAllString(p.Field, ".*.")]
+							if field == "" {
+								field = headerOf[strings.SplitN(p.Field, ".", 2)[0]]
+							}
+							if field == "" {
+								field = im.Alias[strings.SplitN(p.Field, ".", 2)[0]]
+							}
 							if field == "" {
 								field = p.Field
 							}

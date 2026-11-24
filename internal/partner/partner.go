@@ -389,7 +389,7 @@ func values(x Partner) record.Values {
 func New(db *database.DB) *master.Service[Partner, Input] {
 	return &master.Service[Partner, Input]{
 		Spec: master.Spec[Partner, Input]{
-			Menu: "pm.businessPartner", Table: "business_partner", Noun: "Mitra bisnis",
+			Menu: "pm.businessPartner", Table: "business_partner", Noun: "Mitra bisnis", Import: importSpec(db),
 			Base: func(x *Partner) *record.Base { return &x.Base }, Values: values, Parse: Parse,
 			SetCode: func(in *Input, c string) { in.Code = c },
 			Check: func(ctx context.Context, in *Input, stored *Partner, p record.Problems) (record.Problems, error) {

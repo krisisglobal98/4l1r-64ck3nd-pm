@@ -216,6 +216,9 @@ the JSON (see `migrations/000001_org_level.up.sql` and `internal/platform/record
   accounts under one parent — `ImportUnique.Scope`, the same rule as the form) a row whose value another
   record or an earlier row of the file already has (any case) is never added: the row fails with the existing code,
   and the user chooses to fill Kode with it (update) or fix the file and upload again.
+  Mitra Bisnis has one row per partner: its own fields, roles as several labels in one cell (`master.Multi`), and the
+  PRIMARY address, contact and bank account as flat columns that `Import.Assemble` puts into the lists (a change by Kode
+  replaces the filled cells of the primary rows only); `Import.Alias` names the column of a list field in a problem.
   Masters without an import answer 501 `NO_IMPORT`.
 - **System Parameter** (`/system-parameters`, menu `pm.systemParameter`): named values the modules read by `key`
   (capitals, digits, underscores; unique, never changed), `value`, `module`; known keys are checked
