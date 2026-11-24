@@ -2,14 +2,15 @@ package tenant
 
 import (
 	"context"
+	"slices"
 
 	"alir.local/pm-service/internal/platform/codeprefix"
 	"alir.local/pm-service/internal/platform/database"
 )
 
-// The standard reference data a new tenant starts with: the currencies (ISO 4217, with their minor units) and the
-// countries (ISO 3166-1) most used in Indonesian trade. A tenant gets them once, while its table is still empty, and
-// may then deactivate, change or add its own; a country deleted by the tenant does not come back.
+// The standard reference data a tenant starts with: the currencies (ISO 4217, with their minor units) most used in
+// Indonesian trade, and every country of ISO 3166-1 (countries.go). A tenant may then deactivate, change or add its
+// own; a row the tenant deleted does not come back.
 
 type currencyRef struct {
 	iso, name, symbol string
@@ -35,23 +36,6 @@ type countryRef struct {
 	iso2, iso3, phone, name, currency string
 }
 
-var Countries = []countryRef{
-	{"ID", "IDN", "+62", "Indonesia", "IDR"}, {"SG", "SGP", "+65", "Singapura", "SGD"}, {"MY", "MYS", "+60", "Malaysia", "MYR"},
-	{"TH", "THA", "+66", "Thailand", "THB"}, {"VN", "VNM", "+84", "Vietnam", "VND"}, {"PH", "PHL", "+63", "Filipina", "PHP"},
-	{"BN", "BRN", "+673", "Brunei Darussalam", "BND"}, {"KH", "KHM", "+855", "Kamboja", "KHR"}, {"MM", "MMR", "+95", "Myanmar", "MMK"},
-	{"LA", "LAO", "+856", "Laos", "LAK"}, {"TL", "TLS", "+670", "Timor Leste", "USD"}, {"CN", "CHN", "+86", "Tiongkok", "CNY"},
-	{"HK", "HKG", "+852", "Hong Kong", "HKD"}, {"TW", "TWN", "+886", "Taiwan", "TWD"}, {"JP", "JPN", "+81", "Jepang", "JPY"},
-	{"KR", "KOR", "+82", "Korea Selatan", "KRW"}, {"IN", "IND", "+91", "India", "INR"}, {"BD", "BGD", "+880", "Bangladesh", "BDT"},
-	{"PK", "PAK", "+92", "Pakistan", "PKR"}, {"LK", "LKA", "+94", "Sri Lanka", "LKR"}, {"AU", "AUS", "+61", "Australia", "AUD"},
-	{"NZ", "NZL", "+64", "Selandia Baru", "NZD"}, {"US", "USA", "+1", "Amerika Serikat", "USD"}, {"CA", "CAN", "+1", "Kanada", "CAD"},
-	{"MX", "MEX", "+52", "Meksiko", "MXN"}, {"BR", "BRA", "+55", "Brasil", "BRL"}, {"GB", "GBR", "+44", "Britania Raya", "GBP"},
-	{"NL", "NLD", "+31", "Belanda", "EUR"}, {"DE", "DEU", "+49", "Jerman", "EUR"}, {"FR", "FRA", "+33", "Prancis", "EUR"},
-	{"IT", "ITA", "+39", "Italia", "EUR"}, {"ES", "ESP", "+34", "Spanyol", "EUR"}, {"BE", "BEL", "+32", "Belgia", "EUR"},
-	{"CH", "CHE", "+41", "Swiss", "CHF"}, {"TR", "TUR", "+90", "Turki", "TRY"}, {"RU", "RUS", "+7", "Rusia", "RUB"},
-	{"AE", "ARE", "+971", "Uni Emirat Arab", "AED"}, {"SA", "SAU", "+966", "Arab Saudi", "SAR"}, {"EG", "EGY", "+20", "Mesir", "EGP"},
-	{"ZA", "ZAF", "+27", "Afrika Selatan", "ZAR"}, {"NG", "NGA", "+234", "Nigeria", "NGN"}, {"KE", "KEN", "+254", "Kenya", "KES"},
-}
-
 // seedReference adds the standard currencies and countries to a tenant whose tables are still empty (deleted rows
 // count: what the tenant removed stays removed). ctx carries the tenant's connection.
 func seedReference(ctx context.Context, db *database.DB) error {
@@ -75,19 +59,37 @@ func seedReference(ctx context.Context, db *database.DB) error {
 			}
 		}
 	}
-	if ok, err := empty("country"); err != nil {
+	// Countries: every standard one the tenant has never had a row for (deleted rows count), so a tenant made before
+	// the list was complete gets the rest, and a country it removed stays removed.
+	var have []string
+	rows, err := db.Q(ctx).Query(ctx, `SELECT upper(iso2) FROM pm.country`)
+	if err != nil {
 		return err
-	} else if ok {
-		for _, c := range Countries {
-			code, err := codes.Next(ctx, "country")
-			if err != nil {
-				return err
-			}
-			if _, err := db.Q(ctx).Exec(ctx, `INSERT INTO pm.country (code, name, iso2, iso3, phone_code, currency_id, created_by)
-				VALUES ($1, $2, $3, $4, $5, (SELECT id FROM pm.currency WHERE iso_code = $6 AND NOT is_deleted), $7)`,
-				code, c.name, c.iso2, c.iso3, c.phone, c.currency, systemUser); err != nil {
-				return err
-			}
+	}
+	for rows.Next() {
+		var iso string
+		if err := rows.Scan(&iso); err != nil {
+			rows.Close()
+			return err
+		}
+		have = append(have, iso)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, c := range Countries {
+		if slices.Contains(have, c.iso2) {
+			continue
+		}
+		code, err := codes.Next(ctx, "country")
+		if err != nil {
+			return err
+		}
+		if _, err := db.Q(ctx).Exec(ctx, `INSERT INTO pm.country (code, name, iso2, iso3, phone_code, currency_id, created_by)
+			VALUES ($1, $2, $3, $4, $5, (SELECT id FROM pm.currency WHERE iso_code = nullif($6, '') AND NOT is_deleted), $7)`,
+			code, c.name, c.iso2, c.iso3, c.phone, c.currency, systemUser); err != nil {
+			return err
 		}
 	}
 	return nil

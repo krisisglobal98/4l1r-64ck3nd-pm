@@ -57,8 +57,15 @@ func TestReferencePositive(t *testing.T) {
 		}
 		cty := must(t, call(t, "GET", ctyBase, nil), 200).List
 		id := byKey(cty, "iso2", "ID")
-		if len(cty) < 42 || id == nil || id["iso3"] != "IDN" || id["phoneCode"] != "+62" || id["currencyCode"] != idr["code"] || id["name"] != "Indonesia" {
+		if len(cty) < 249 || id == nil || id["iso3"] != "IDN" || id["phoneCode"] != "+62" || id["currencyCode"] != idr["code"] || id["name"] != "Indonesia" {
 			t.Fatalf("countries %d id %v", len(cty), id)
+		}
+		// The whole of ISO 3166-1: a forwarder's consignees are anywhere; a country without the currency in the
+		// master has none linked.
+		for iso, name := range map[string]string{"SN": "Senegal", "PG": "Papua Nugini", "HT": "Haiti", "AF": "Afganistan", "ZW": "Zimbabwe"} {
+			if c := byKey(cty, "iso2", iso); c == nil || c["name"] != name || c["currencyCode"] != nil {
+				t.Errorf("%s: %v", iso, c)
+			}
 		}
 	})
 
