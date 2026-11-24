@@ -29,15 +29,18 @@ type TaxType struct {
 	EffectivePct float64 `json:"effectivePct"` // rate × base share: what is charged on the full amount
 	Method       string  `json:"method"`       // added | withheld
 	TaxCode      *string `json:"taxCode"`
+	// Inclusive: the price already holds the tax (PPN taken out of the amount, not added on top).
+	Inclusive bool `json:"inclusive"`
 }
 
 type Input struct {
 	record.Input
-	Category string
-	RatePct  float64
-	BasePct  float64
-	Method   string
-	TaxCode  *string
+	Category  string
+	RatePct   float64
+	BasePct   float64
+	Method    string
+	TaxCode   *string
+	Inclusive bool
 }
 
 func Parse(v record.Values) (Input, record.Problems) {
@@ -65,12 +68,17 @@ func Parse(v record.Values) (Input, record.Problems) {
 		}
 	}
 	in.TaxCode = record.OptionalText(v, "taxCode", "Kode pajak", 20, &p)
+	in.Inclusive = record.Bool(v, "inclusive", "Harga sudah termasuk pajak", false, &p)
+	if in.Inclusive && in.Method != "added" && !p.Has("method") {
+		p.Add("inclusive", "Harga termasuk pajak hanya untuk pajak yang ditambahkan ke tagihan (PPN).")
+	}
 	return in, p
 }
 
 func values(x TaxType) record.Values {
 	v := record.ValuesOf(x.Base)
 	v["category"], v["ratePct"], v["basePct"], v["method"], v["taxCode"] = x.Category, x.RatePct, x.BasePct, x.Method, nil
+	v["inclusive"] = x.Inclusive
 	if x.TaxCode != nil {
 		v["taxCode"] = *x.TaxCode
 	}
@@ -90,11 +98,11 @@ func New(db *database.DB) *master.Service[TaxType, Input] {
 
 type repo struct{ db *database.DB }
 
-var cols = record.Columns + `, category, rate_pct, base_pct, method, tax_code`
+var cols = record.Columns + `, category, rate_pct, base_pct, method, tax_code, is_inclusive`
 
 func scan(row pgx.Row) (TaxType, error) {
 	var x TaxType
-	err := x.Scan(row, &x.Category, &x.RatePct, &x.BasePct, &x.Method, &x.TaxCode)
+	err := x.Scan(row, &x.Category, &x.RatePct, &x.BasePct, &x.Method, &x.TaxCode, &x.Inclusive)
 	x.EffectivePct = math.Round(x.RatePct*x.BasePct/100*10000) / 10000
 	return x, err
 }
@@ -112,15 +120,15 @@ func (r repo) Get(ctx context.Context, code string, forUpdate bool) (TaxType, er
 }
 
 func (r repo) Insert(ctx context.Context, in Input, actor string) (TaxType, error) {
-	return master.One(ctx, r.db, scan, `INSERT INTO pm.tax_type (code, name, description, is_active, valid_from, valid_to, created_by, category, rate_pct, base_pct, method, tax_code)
-		VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, $10, $11, $12) RETURNING `+cols,
-		in.Code, in.Name, in.Description, in.Active, in.ValidFrom, in.ValidTo, actor, in.Category, in.RatePct, in.BasePct, in.Method, in.TaxCode)
+	return master.One(ctx, r.db, scan, `INSERT INTO pm.tax_type (code, name, description, is_active, valid_from, valid_to, created_by, category, rate_pct, base_pct, method, tax_code, is_inclusive)
+		VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, $10, $11, $12, $13) RETURNING `+cols,
+		in.Code, in.Name, in.Description, in.Active, in.ValidFrom, in.ValidTo, actor, in.Category, in.RatePct, in.BasePct, in.Method, in.TaxCode, in.Inclusive)
 }
 
 func (r repo) Update(ctx context.Context, id string, in Input, actor string) (TaxType, error) {
 	return master.One(ctx, r.db, scan, `UPDATE pm.tax_type SET name = $2, description = $3, is_active = $4, valid_from = $5::date, valid_to = $6::date,
-		category = $7, rate_pct = $8, base_pct = $9, method = $10, tax_code = $11, updated_at = now(), updated_by = $12, version = version + 1
-		WHERE id = $1 AND NOT is_deleted RETURNING `+cols, id, in.Name, in.Description, in.Active, in.ValidFrom, in.ValidTo, in.Category, in.RatePct, in.BasePct, in.Method, in.TaxCode, actor)
+		category = $7, rate_pct = $8, base_pct = $9, method = $10, tax_code = $11, is_inclusive = $13, updated_at = now(), updated_by = $12, version = version + 1
+		WHERE id = $1 AND NOT is_deleted RETURNING `+cols, id, in.Name, in.Description, in.Active, in.ValidFrom, in.ValidTo, in.Category, in.RatePct, in.BasePct, in.Method, in.TaxCode, actor, in.Inclusive)
 }
 
 func (r repo) SoftDelete(ctx context.Context, id, actor string) error {

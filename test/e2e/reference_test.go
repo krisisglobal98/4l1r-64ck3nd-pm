@@ -203,6 +203,16 @@ func TestReferenceNegative(t *testing.T) {
 		}
 	})
 
+	t.Run("RN05b a PPN whose price holds the tax (inclusive); only a tax added to the bill may be", func(t *testing.T) {
+		x := must(t, call(t, "POST", taxBase, map[string]any{"name": "PPN 2 Uji", "category": "PPN", "ratePct": 11, "basePct": 10, "inclusive": true}), 201)
+		if x.Obj["inclusive"] != true || x.Obj["effectivePct"] != 1.1 {
+			t.Errorf("inclusive %s", trunc(x.Raw))
+		}
+		if y := call(t, "POST", taxBase, map[string]any{"name": "PPh Termasuk", "category": "PPH23", "ratePct": 2, "inclusive": true}); !want(t, y, 422) || y.problem("inclusive") == "" {
+			t.Errorf("withheld inclusive %s", trunc(y.Raw))
+		}
+	})
+
 	t.Run("RN06 a currency or country is global: never deleted (deactivated instead)", func(t *testing.T) {
 		cur := must(t, call(t, "POST", curBase, map[string]any{"name": "Mata Uang Global", "isoCode": "XTC"}), 201)
 		if r := call(t, "DELETE", curBase+"/"+cur.str("code"), nil); r.Status != 409 || !strings.Contains(r.str("message"), "nonaktifkan") {
