@@ -14,10 +14,11 @@ var KindLabels = map[string]string{"seaport": "Pelabuhan laut", "river_port": "P
 // importSpec is the Excel import of Pelabuhan & Lokasi.
 func importSpec(db *database.DB) *master.Import {
 	return &master.Import{
-		Unique: []master.ImportUnique{{Key: "unlocode", Column: "unlocode"}, {Key: "name", Column: "name", Scope: "countryCode", ScopeColumn: "country_id", ScopeTable: "country"}},
+		Unique: []master.ImportUnique{{Key: "unlocode", Column: "unlocode"}, {Key: "nickname", Column: "nickname"}, {Key: "name", Column: "name", Scope: "countryCode", ScopeColumn: "country_id", ScopeTable: "country"}},
 		Columns: master.Columns([]master.ImportColumn{
 			master.CodeColumn("MLK001"),
 			{Header: "Nama Lokasi", Key: "name", Required: true, Hint: "Nama pelabuhan / bandara / kota, maks. 150 karakter. Tidak boleh sama dalam satu negara.", Example: "Tanjung Priok", Width: 26},
+			{Header: "Singkatan", Key: "nickname", Hint: "Singkatan lokasi, mis. JKT, BLW; maks. 20 karakter, tidak boleh sama. Dipakai di akhir nomor job (pelabuhan asal).", Example: "JKT", Width: 10},
 			{Header: "UN/LOCODE", Key: "unlocode", Text: true, Hint: "5 karakter: kode negara lalu 3 huruf/angka, mis. IDTPP. Tidak boleh sama.", Example: "IDTPP", Width: 10},
 			{Header: "Negara", Key: "countryCode", Required: true, Convert: master.Lookup(db, "country", "Negara", "iso2", "iso3", "code", "name"), Hint: "Kode ISO 2 huruf (sheet Negara).", Example: "ID", Width: 10},
 			{Header: "Kota", Key: "cityCode", Convert: master.Lookup(db, "city", "Kota", "code", "name"), Hint: "Kode atau nama di master Kota; kosongkan bila belum ada.", Width: 14},

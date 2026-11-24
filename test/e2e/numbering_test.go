@@ -39,6 +39,7 @@ func TestNumbering(t *testing.T) {
 			`{"name":"x","docType":"X.B","pattern":"A-{YYYY}-{SEQ:3}","reset":"monthly","validFrom":"2026-01-01"}`: "pattern",
 			`{"name":"x","docType":"X.C","pattern":"A-{FOO}-{SEQ:3}","validFrom":"2026-01-01"}`:              "pattern",
 			`{"name":"x","docType":"X.D","pattern":"A-{SEQ:3}","scope":"unit","validFrom":"2026-01-01"}`:     "pattern",
+			`{"name":"x","docType":"X.P","pattern":"{SEQ:4}/{MM}/{YY}","scope":"port","validFrom":"2026-01-01"}`: "pattern",
 			`{"name":"x","docType":"x d","pattern":"A-{SEQ:3}","validFrom":"2026-01-01"}`:                    "docType",
 			`{"name":"x","docType":"X.E","pattern":"A-{SEQ:3}"}`:                                             "validFrom",
 			`{"name":"x","docType":"FF.JOB","pattern":"A-{SEQ:3}","validFrom":"2026-01-01"}`:                 "validFrom",
@@ -46,6 +47,10 @@ func TestNumbering(t *testing.T) {
 			if x := call(t, "POST", numBase, body); !want(t, x, 422) || x.problem(field) == "" {
 				t.Errorf("%s: %s", body, trunc(x.Raw))
 			}
+		}
+		// The job number of LKT: per origin port and year, the port's nickname last.
+		if p := must(t, call(t, "POST", numBase, map[string]any{"name": "Job per pelabuhan", "docType": "X.PORT", "pattern": "{SEQ:4}/{MM}/{YY}/{PORT}", "reset": "yearly", "scope": "port", "validFrom": "2026-01-01"}), 201); p.str("scope") != "port" {
+			t.Errorf("port scope %s", trunc(p.Raw))
 		}
 		if x := call(t, "GET", "/pm/numbering/NOPE.DOC", nil); x.Status != 404 {
 			t.Errorf("unknown type %d", x.Status)

@@ -28,10 +28,10 @@ import (
 
 var (
 	Resets  = []string{"never", "yearly", "monthly", "daily"}
-	Scopes  = []string{"global", "company", "unit"}
+	Scopes  = []string{"global", "company", "unit", "port"}
 	token   = regexp.MustCompile(`\{([A-Z]+)(?::(\d+))?\}`)
 	docType = regexp.MustCompile(`^[A-Z][A-Z0-9_.-]{1,39}$`)
-	known   = map[string]bool{"PT": true, "UNIT": true, "YYYY": true, "YY": true, "MM": true, "DD": true, "SEQ": true}
+	known   = map[string]bool{"PT": true, "UNIT": true, "YYYY": true, "YY": true, "MM": true, "DD": true, "SEQ": true, "PORT": true}
 )
 
 // Problem says why a pattern cannot be used with this reset and scope ("" when it can): numbers must never repeat.
@@ -40,7 +40,7 @@ func Problem(pattern, reset, scope string) string {
 	has := map[string]bool{}
 	for _, m := range token.FindAllStringSubmatch(pattern, -1) {
 		if !known[m[1]] {
-			return fmt.Sprintf("Token {%s} tidak dikenal. Gunakan {PT}, {UNIT}, {YYYY}, {YY}, {MM}, {DD}, atau {SEQ:n}.", m[1])
+			return fmt.Sprintf("Token {%s} tidak dikenal. Gunakan {PT}, {UNIT}, {PORT}, {YYYY}, {YY}, {MM}, {DD}, atau {SEQ:n}.", m[1])
 		}
 		has[m[1]] = true
 		if m[1] == "SEQ" {
@@ -65,6 +65,8 @@ func Problem(pattern, reset, scope string) string {
 		return "Urutan per perusahaan butuh {PT} agar nomor antar-perusahaan tidak sama."
 	case scope == "unit" && !has["UNIT"]:
 		return "Urutan per unit butuh {UNIT} agar nomor antar-unit tidak sama."
+	case scope == "port" && !has["PORT"]:
+		return "Urutan per pelabuhan butuh {PORT} (singkatan pelabuhan asal) agar nomor antar-pelabuhan tidak sama."
 	}
 	return ""
 }

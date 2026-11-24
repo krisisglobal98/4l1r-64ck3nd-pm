@@ -67,6 +67,17 @@ func TestLogisticsPositive(t *testing.T) {
 		}
 		if d := call(t, "DELETE", cityBase+"/"+city, nil); !want(t, d, 409) || !strings.Contains(d.str("message"), "lokasi") {
 			t.Errorf("city in use %s", trunc(d.Raw))
+		} // Singkatan: upper-cased, one live location per nickname.
+		nick := "J" + letters(locSeq.Add(1), 2)
+		n := must(t, call(t, "PUT", locBase+"/"+p.str("code"), map[string]any{"nickname": strings.ToLower(nick)}), 200)
+		if n.str("nickname") != nick {
+			t.Errorf("nickname %s", trunc(n.Raw))
+		}
+		if x := call(t, "PUT", locBase+"/"+a.str("code"), map[string]any{"nickname": nick}); !want(t, x, 422) || x.problem("nickname") == "" {
+			t.Errorf("taken nickname %s", trunc(x.Raw))
+		}
+		if x := call(t, "PUT", locBase+"/"+a.str("code"), map[string]any{"nickname": "J*K"}); !want(t, x, 422) || x.problem("nickname") == "" {
+			t.Errorf("bad nickname %s", trunc(x.Raw))
 		}
 	})
 

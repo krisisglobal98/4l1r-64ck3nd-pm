@@ -34,6 +34,7 @@ type Location struct {
 	CityCode      *string  `json:"cityCode"`
 	Kind          string   `json:"kind"`
 	IataCode      *string  `json:"iataCode"`
+	Nickname      *string  `json:"nickname"` // singkatan, e.g. JKT: printed on documents, ends the Operation job number
 	CustomsOffice *string  `json:"customsOffice"`
 	Latitude      *float64 `json:"latitude"`
 	Longitude     *float64 `json:"longitude"`
@@ -42,6 +43,7 @@ type Location struct {
 type Input struct {
 	record.Input
 	Unlocode, CityCode, IataCode, CustomsOffice *string
+	Nickname                                    *string
 	CountryCode, Kind                           string
 	Latitude, Longitude                         *float64
 	CountryID                                   string
@@ -51,6 +53,7 @@ type Input struct {
 var (
 	unlocode = regexp.MustCompile(`^[A-Z]{2}[A-Z2-9]{3}$`)
 	iata     = regexp.MustCompile(`^[A-Z]{3}$`)
+	nickname = regexp.MustCompile(`^[A-Z0-9][A-Z0-9 .-]{0,19}$`)
 	customs  = regexp.MustCompile(`^[0-9]{6}$`)
 )
 
@@ -71,6 +74,9 @@ func Parse(v record.Values) (Input, record.Problems) {
 	in.CountryCode = record.RequiredText(v, "countryCode", "Negara", record.MaxCode, &p)
 	in.CityCode = record.OptionalText(v, "cityCode", "Kota", record.MaxCode, &p)
 	in.Kind = record.Choice(v, "kind", "Jenis lokasi", Kinds, &p)
+	if in.Nickname = upper(record.OptionalText(v, "nickname", "Singkatan", 20, &p)); in.Nickname != nil && !p.Has("nickname") && !nickname.MatchString(*in.Nickname) {
+		p.Add("nickname", "Singkatan berisi huruf besar, angka, spasi, titik atau -, maks. 20 karakter, mis. JKT.")
+	}
 	if in.IataCode = upper(record.OptionalText(v, "iataCode", "Kode IATA", 3, &p)); in.IataCode != nil && !p.Has("iataCode") {
 		switch {
 		case !iata.MatchString(*in.IataCode):
@@ -93,6 +99,7 @@ func Parse(v record.Values) (Input, record.Problems) {
 func values(x Location) record.Values {
 	v := record.ValuesOf(x.Base)
 	v["unlocode"], v["countryCode"], v["cityCode"], v["kind"] = record.Opt(x.Unlocode), x.CountryCode, record.Opt(x.CityCode), x.Kind
+	v["nickname"] = record.Opt(x.Nickname)
 	v["iataCode"], v["customsOffice"], v["latitude"], v["longitude"] = record.Opt(x.IataCode), record.Opt(x.CustomsOffice), record.Opt(x.Latitude), record.Opt(x.Longitude)
 	return v
 }
@@ -121,7 +128,7 @@ func check(ctx context.Context, db *database.DB, in *Input, stored *Location, p 
 		field, column string
 		value         *string
 		what          string
-	}{{"unlocode", "unlocode", in.Unlocode, "UN/LOCODE"}, {"iataCode", "iata_code", in.IataCode, "Kode IATA"}} {
+	}{{"unlocode", "unlocode", in.Unlocode, "UN/LOCODE"}, {"iataCode", "iata_code", in.IataCode, "Kode IATA"}, {"nickname", "nickname", in.Nickname, "Singkatan"}} {
 		if u.value == nil || p.Has(u.field) {
 			continue
 		}
@@ -170,11 +177,11 @@ func check(ctx context.Context, db *database.DB, in *Input, stored *Location, p 
 type repo struct{ db *database.DB }
 
 var sel = `SELECT ` + record.ColumnsAs("x") + `, x.unlocode, x.country_id, c.code, x.city_id, ci.code, x.kind, x.iata_code, x.customs_office,
-	x.latitude::float8, x.longitude::float8 FROM pm.location x JOIN pm.country c ON c.id = x.country_id LEFT JOIN pm.city ci ON ci.id = x.city_id`
+	x.latitude::float8, x.longitude::float8, x.nickname FROM pm.location x JOIN pm.country c ON c.id = x.country_id LEFT JOIN pm.city ci ON ci.id = x.city_id`
 
 func scan(row pgx.Row) (Location, error) {
 	var x Location
-	return x, x.Scan(row, &x.Unlocode, &x.CountryID, &x.CountryCode, &x.CityID, &x.CityCode, &x.Kind, &x.IataCode, &x.CustomsOffice, &x.Latitude, &x.Longitude)
+	return x, x.Scan(row, &x.Unlocode, &x.CountryID, &x.CountryCode, &x.CityID, &x.CityCode, &x.Kind, &x.IataCode, &x.CustomsOffice, &x.Latitude, &x.Longitude, &x.Nickname)
 }
 
 func (r repo) List(ctx context.Context) ([]Location, error) {
@@ -196,10 +203,10 @@ func (r repo) byID(ctx context.Context, id string) (Location, error) {
 func (r repo) Insert(ctx context.Context, in Input, actor string) (Location, error) {
 	var id string
 	if err := r.db.Q(ctx).QueryRow(ctx, `INSERT INTO pm.location (code, name, description, is_active, valid_from, valid_to, created_by,
-		unlocode, country_id, city_id, kind, iata_code, customs_office, latitude, longitude)
-		VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
+		unlocode, country_id, city_id, kind, iata_code, customs_office, latitude, longitude, nickname)
+		VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
 		in.Code, in.Name, in.Description, in.Active, in.ValidFrom, in.ValidTo, actor,
-		in.Unlocode, in.CountryID, in.CityID, in.Kind, in.IataCode, in.CustomsOffice, in.Latitude, in.Longitude).Scan(&id); err != nil {
+		in.Unlocode, in.CountryID, in.CityID, in.Kind, in.IataCode, in.CustomsOffice, in.Latitude, in.Longitude, in.Nickname).Scan(&id); err != nil {
 		return Location{}, err
 	}
 	return r.byID(ctx, id)
@@ -208,9 +215,9 @@ func (r repo) Insert(ctx context.Context, in Input, actor string) (Location, err
 func (r repo) Update(ctx context.Context, id string, in Input, actor string) (Location, error) {
 	if err := master.Exec(ctx, r.db, `UPDATE pm.location SET name = $2, description = $3, is_active = $4, valid_from = $5::date, valid_to = $6::date,
 		unlocode = $7, country_id = $8, city_id = $9, kind = $10, iata_code = $11, customs_office = $12, latitude = $13, longitude = $14,
-		updated_at = now(), updated_by = $15, version = version + 1 WHERE id = $1 AND NOT is_deleted`,
+		nickname = $16, updated_at = now(), updated_by = $15, version = version + 1 WHERE id = $1 AND NOT is_deleted`,
 		id, in.Name, in.Description, in.Active, in.ValidFrom, in.ValidTo,
-		in.Unlocode, in.CountryID, in.CityID, in.Kind, in.IataCode, in.CustomsOffice, in.Latitude, in.Longitude, actor); err != nil {
+		in.Unlocode, in.CountryID, in.CityID, in.Kind, in.IataCode, in.CustomsOffice, in.Latitude, in.Longitude, actor, in.Nickname); err != nil {
 		return Location{}, err
 	}
 	return r.byID(ctx, id)
