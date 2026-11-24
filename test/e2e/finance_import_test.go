@@ -264,4 +264,35 @@ func TestFinanceImport(t *testing.T) {
 			t.Errorf("over the limit %s", trunc(r.Raw))
 		}
 	})
+
+	t.Run("FI10 Bagan Akun names: the same name under other parents is fine, under one parent it is not", func(t *testing.T) {
+		h1 := account(t, map[string]any{"name": "Beban Operasional " + sfx, "accountNo": "7-" + sfx, "accountType": "expense", "header": true})
+		h2 := account(t, map[string]any{"name": "Beban Non Operasional " + sfx, "accountNo": "8-" + sfx, "accountType": "expense", "header": true})
+		account(t, map[string]any{"name": "Beban Lain-lain", "accountNo": "7-" + sfx + ".9", "accountType": "expense", "parentCode": h1.str("code")})
+		// The form: another parent is fine; the same parent and the top level are not.
+		account(t, map[string]any{"name": "Beban Lain-lain", "accountNo": "8-" + sfx + ".9", "accountType": "expense", "parentCode": h2.str("code")})
+		if x := call(t, "POST", accBase, map[string]any{"name": "beban lain-lain ", "accountNo": "7-" + sfx + ".8", "accountType": "expense", "parentCode": h1.str("code")}); !want(t, x, 422) || !strings.Contains(x.problem("name"), "induk yang sama") {
+			t.Errorf("same parent %s", trunc(x.Raw))
+		}
+		if x := call(t, "POST", accBase, map[string]any{"name": "Beban Operasional " + sfx, "accountNo": "9-" + sfx, "accountType": "expense"}); !want(t, x, 422) || !strings.Contains(x.problem("name"), "tingkat teratas") {
+			t.Errorf("top level %s", trunc(x.Raw))
+		}
+		// The file: the same name twice under one new header is caught in the file; under two headers it passes.
+		head := []any{"Kode", "No. Akun", "Nama Akun", "Tipe Akun", "Akun Induk", "No. Akun Induk"}
+		x := upload(t, accBase, false, head,
+			[]any{"", "7-" + sfx + ".1", "Beban Sewa", "Beban", "Tidak", "7-" + sfx},
+			[]any{"", "8-" + sfx + ".1", "Beban Sewa", "Beban", "Tidak", "8-" + sfx},
+			[]any{"", "7-" + sfx + ".2", "BEBAN SEWA", "Beban", "Tidak", h1.str("code")},
+			[]any{"", "7-" + sfx + ".3", "Beban Lain-lain", "Beban", "Tidak", "7-" + sfx},
+		)
+		if p := rowProblems(x, 1); p != "" {
+			t.Errorf("other parent: %s", p)
+		}
+		if p := rowProblems(x, 2); !strings.Contains(p, "baris 2") {
+			t.Errorf("same parent in the file (by number and by code): %s", p)
+		}
+		if p := rowProblems(x, 3); !strings.Contains(p, "Nama Akun") || !strings.Contains(p, "induk yang sama") {
+			t.Errorf("same parent as a stored account: %s", p)
+		}
+	})
 }

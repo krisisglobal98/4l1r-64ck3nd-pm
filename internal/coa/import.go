@@ -11,11 +11,11 @@ import (
 // accounts under them in the file, so a later row can name an earlier one as its parent.
 func importSpec(db *database.DB) *master.Import {
 	return &master.Import{
-		Unique: []master.ImportUnique{{Key: "accountNo", Column: "account_no"}},
+		Unique: []master.ImportUnique{{Key: "accountNo", Column: "account_no"}, {Key: "name", Column: "name", Scope: "parentCode"}},
 		Columns: master.Columns([]master.ImportColumn{
 			master.CodeColumn("MCA0001"),
 			{Header: "No. Akun", Key: "accountNo", Text: true, Required: true, Hint: "Nomor akun perusahaan: huruf, angka, titik, atau tanda hubung. Tidak boleh sama dengan akun lain.", Example: "4-1100", Width: 12},
-			{Header: "Nama Akun", Key: "name", Required: true, Hint: "Maks. 120 karakter.", Example: "Pendapatan Freight", Width: 28},
+			{Header: "Nama Akun", Key: "name", Required: true, Hint: "Maks. 120 karakter. Boleh sama dengan akun di bawah induk lain, tidak boleh sama di bawah induk yang sama.", Example: "Pendapatan Freight", Width: 28},
 			{Header: "Tipe Akun", Key: "accountType", Required: true, Choices: master.Labels(Types, TypeLabels), Convert: master.ByLabel(TypeLabels), Hint: "Menentukan saldo normal (debit/kredit).", Example: "Pendapatan", Width: 22},
 			{Header: "Akun Induk", Key: "header", Choices: []string{"Ya", "Tidak"}, Convert: master.YesNo, Hint: "Ya untuk akun pengelompok (header), tidak dipakai jurnal. Kosong berarti Tidak. Letakkan di atas akun-akun di bawahnya.", Example: "Tidak", Width: 10},
 			{Header: "No. Akun Induk", Key: "parentCode", Convert: master.Lookup(db, "account", "Akun induk", "account_no", "code"), Hint: "No. akun header di atasnya, dengan tipe yang sama (sheet Akun Induk, atau baris di atasnya dalam file ini).", Example: "4-1000", Width: 14},

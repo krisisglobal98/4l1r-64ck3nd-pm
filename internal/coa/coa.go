@@ -133,6 +133,22 @@ func New(db *database.DB) *master.Service[Account, Input] {
 						in.ParentID = &par.ID
 					}
 				}
+				// The account number is the identity; a name may repeat under other parents ("Beban Lain-lain" under
+				// several headers) but not among the accounts under one parent, where a report could not tell them apart.
+				if in.Name != "" && !p.Has("name") && !p.Has("parentCode") {
+					var other, otherNo string
+					switch err := db.Q(ctx).QueryRow(ctx, `SELECT code, account_no FROM pm.account WHERE lower(btrim(name)) = lower(btrim($1))
+						AND parent_id IS NOT DISTINCT FROM $2::uuid AND NOT is_deleted AND id::text <> $3 ORDER BY account_no LIMIT 1`, in.Name, in.ParentID, self).Scan(&other, &otherNo); {
+					case err == nil:
+						where := "di tingkat teratas"
+						if in.ParentID != nil {
+							where = "di bawah akun induk yang sama"
+						}
+						p.Add("name", fmt.Sprintf("Nama akun %s sudah dipakai akun %s (No. %s) %s; beri nama yang berbeda.", in.Name, other, otherNo, where))
+					case !errors.Is(err, pgx.ErrNoRows):
+						return p, err
+					}
+				}
 				if stored != nil && stored.Header && !in.Header {
 					var n int
 					if err := db.Q(ctx).QueryRow(ctx, `SELECT count(*) FROM pm.account WHERE parent_id = $1 AND NOT is_deleted`, stored.ID).Scan(&n); err != nil {

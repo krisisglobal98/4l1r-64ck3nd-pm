@@ -212,7 +212,8 @@ the JSON (see `migrations/000001_org_level.up.sql` and `internal/platform/record
   (the .xlsx as the body, ≤ 5 MB, ≤ 2000 rows) checks every row through the form's own create/update in one
   transaction and answers `{rows[{row, action, code, name, problems}], added, updated, failed, committed}`;
   `?commit=true` keeps it only when no row fails (a row with a Kode changes only its filled cells). With `Import.Unique`
-  (names; Mata Uang also the ISO code, Bank the SWIFT, Bagan Akun only the account number) a row whose value another
+  (names; Mata Uang also the ISO code, Bank the SWIFT; Bagan Akun the account number, and the name only among the
+  accounts under one parent — `ImportUnique.Scope`, the same rule as the form) a row whose value another
   record or an earlier row of the file already has (any case) is never added: the row fails with the existing code,
   and the user chooses to fill Kode with it (update) or fix the file and upload again.
   Masters without an import answer 501 `NO_IMPORT`.

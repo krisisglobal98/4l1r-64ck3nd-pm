@@ -36,8 +36,10 @@ type Import struct {
 	Describe func(cells map[string]string) string
 }
 
-// ImportUnique is a unique column: the form value Key, stored in the table column Column.
-type ImportUnique struct{ Key, Column string }
+// ImportUnique is a unique column: the form value Key, stored in the table column Column. With Scope (a form key, e.g.
+// parentCode) the value is unique only among records of the same scope: the file's rows are checked here, stored
+// records by the master's own check.
+type ImportUnique struct{ Key, Column, Scope string }
 
 type ImportColumn struct {
 	Header   string // as in the template's header row ("*" is added when Required)
@@ -326,7 +328,11 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 				if !ok {
 					continue
 				}
-				problem, err := s.duplicate(ctx, un, headerOf[un.Key], val, code, out.Row, seen)
+				scope := ""
+				if un.Scope != "" {
+					scope, _ = v[un.Scope].(string)
+				}
+				problem, err := s.duplicate(ctx, un, headerOf[un.Key], val, scope, code, out.Row, seen)
 				if err != nil {
 					return err
 				}
@@ -412,13 +418,18 @@ func (s *Service[T, I]) importFile(ctx context.Context, data []byte, commit bool
 // it has a code), or by an earlier row of the file. A row joins seen only when its value passes, so a rejected row does
 // not block the rows after it; rows saved earlier in the transaction are caught by seen, so a stored code it names
 // always exists.
-func (s *Service[T, I]) duplicate(ctx context.Context, un ImportUnique, header, value, code string, row int, seen map[string]int) (string, error) {
+func (s *Service[T, I]) duplicate(ctx context.Context, un ImportUnique, header, value, scope, code string, row int, seen map[string]int) (string, error) {
 	key := strings.ToLower(strings.TrimSpace(value))
 	if key == "" {
 		return "", nil
 	}
-	if r, ok := seen[un.Key+"\x00"+key]; ok {
+	seenKey := un.Key + "\x00" + strings.ToLower(scope) + "\x00" + key
+	if r, ok := seen[seenKey]; ok {
 		return fmt.Sprintf("%s \"%s\" sama dengan baris %d di file ini. Satukan kedua baris atau ganti salah satu.", header, value, r), nil
+	}
+	if un.Scope != "" {
+		seen[seenKey] = row
+		return "", nil
 	}
 	var other string
 	err := s.DB.Q(ctx).QueryRow(ctx, `SELECT code FROM pm.`+s.Spec.Table+` WHERE lower(btrim(`+un.Column+`)) = $1 AND NOT is_deleted AND lower(code) <> lower($2)
@@ -426,7 +437,7 @@ func (s *Service[T, I]) duplicate(ctx context.Context, un ImportUnique, header, 
 	noun := strings.ToLower(s.Spec.Noun)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		seen[un.Key+"\x00"+key] = row
+		seen[seenKey] = row
 		return "", nil
 	case err != nil:
 		return "", err
