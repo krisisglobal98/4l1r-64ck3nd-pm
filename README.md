@@ -220,6 +220,10 @@ the JSON (see `migrations/000001_org_level.up.sql` and `internal/platform/record
   Mitra Bisnis has one row per partner: its own fields, roles as several labels in one cell (`master.Multi`), and the
   PRIMARY address, contact and bank account as flat columns that `Import.Assemble` puts into the lists (a change by Kode
   replaces the filled cells of the primary rows only); `Import.Alias` names the column of a list field in a problem.
+  Also Jenis Kontainer, Satuan, Jenis Dokumen, Pelabuhan & Lokasi (the name unique within its country:
+  `ImportUnique.Scope` with `ScopeColumn`/`ScopeTable` checks stored rows too) and Tenaga Penjualan (the employee by
+  code or NIK; an inactive sales person may point to an inactive employee, for history). Roles in one cell are
+  separated by a comma or semicolon (labels such as "Pelayaran / maskapai" hold a slash).
   Masters without an import answer 501 `NO_IMPORT`.
 - **System Parameter** (`/system-parameters`, menu `pm.systemParameter`): named values the modules read by `key`
   (capitals, digits, underscores; unique, never changed), `value`, `module`; known keys are checked

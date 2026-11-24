@@ -98,7 +98,7 @@ func importSpec(db *database.DB) *master.Import {
 			master.NameColumn("Nama Mitra", "PT Contoh Ekspor Indonesia"),
 			{Header: "Nama Dagang", Key: "tradeName", Hint: "Nama yang dikenal sehari-hari / singkatan, bila beda dari nama resmi.", Example: "CONTOH", Width: 18},
 			{Header: "Bentuk Usaha", Key: "entityType", Required: true, Choices: master.Labels(EntityTypes, EntityLabels), Convert: master.ByLabel(EntityLabels), Hint: "Mitra luar negeri: Badan usaha asing.", Example: "PT", Width: 18},
-			{Header: "Peran", Key: "roles", Required: true, Convert: master.Multi(RoleLabels), Hint: "Satu atau beberapa, dipisah koma: " + strings.Join(master.Labels(Roles, RoleLabels), ", ") + ". Customer wajib punya Syarat Pembayaran Customer, Mata Uang Tagihan, dan Alamat.", Example: "Customer, Shipper", Width: 24},
+			{Header: "Peran", Key: "roles", Required: true, Convert: master.Multi(RoleLabels), Hint: "Satu atau beberapa, dipisah koma atau titik koma: " + strings.Join(master.Labels(Roles, RoleLabels), ", ") + ". Customer wajib punya Syarat Pembayaran Customer, Mata Uang Tagihan, dan Alamat.", Example: "Customer, Shipper", Width: 24},
 			{Header: "Negara", Key: "countryCode", Required: true, Convert: master.Lookup(db, "country", "Negara", "iso2", "iso3", "code", "name"), Hint: "Negara domisili: kode ISO 2 huruf (sheet Negara), mis. ID.", Example: "ID", Width: 10},
 			{Header: "Email", Key: "email", Hint: "Email perusahaan.", Example: "info@contoh.co.id", Width: 22},
 			{Header: "Telepon", Key: "phone", Hint: "Angka, spasi, ( ) atau -, boleh diawali +, maks. 30 karakter.", Example: "+62 21 555 0101", Width: 18},

@@ -100,7 +100,7 @@ func values(x Location) record.Values {
 func New(db *database.DB) *master.Service[Location, Input] {
 	return &master.Service[Location, Input]{
 		Spec: master.Spec[Location, Input]{
-			Menu: "pm.port", Table: "location", Noun: "Lokasi",
+			Menu: "pm.port", Table: "location", Noun: "Lokasi", Import: importSpec(db),
 			Base: func(x *Location) *record.Base { return &x.Base }, Values: values, Parse: Parse,
 			SetCode: func(in *Input, c string) { in.Code = c },
 			Check: func(ctx context.Context, in *Input, stored *Location, p record.Problems) (record.Problems, error) {

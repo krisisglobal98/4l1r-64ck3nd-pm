@@ -76,7 +76,7 @@ func values(x DocumentType) record.Values {
 func New(db *database.DB) *master.Service[DocumentType, Input] {
 	return &master.Service[DocumentType, Input]{
 		Spec: master.Spec[DocumentType, Input]{
-			Menu: "pm.documentType", Table: "document_type", Noun: "Jenis dokumen",
+			Menu: "pm.documentType", Table: "document_type", Noun: "Jenis dokumen", Import: importSpec(db),
 			Base: func(x *DocumentType) *record.Base { return &x.Base }, Values: values, Parse: Parse,
 			SetCode: func(in *Input, c string) { in.Code = c },
 			Check: func(ctx context.Context, in *Input, stored *DocumentType, p record.Problems) (record.Problems, error) {

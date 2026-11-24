@@ -146,12 +146,13 @@ func Labels(codes []string, labels map[string]string) []string {
 	return out
 }
 
-// Multi reads several choices in one cell, separated by a comma, semicolon or slash, each by its code or label.
+// Multi reads several choices in one cell, separated by a comma or semicolon (not a slash: labels such as "Pelayaran /
+// maskapai" hold one), each by its code or label.
 func Multi(labels map[string]string) func(context.Context, string) (any, string, error) {
 	one := ByLabel(labels)
 	return func(ctx context.Context, s string) (any, string, error) {
 		var out []any
-		for _, part := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ';' || r == '/' || r == '\n' }) {
+		for _, part := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ';' || r == '\n' }) {
 			if strings.TrimSpace(part) == "" {
 				continue
 			}

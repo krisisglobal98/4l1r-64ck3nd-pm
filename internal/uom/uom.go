@@ -65,7 +65,7 @@ func values(x Uom) record.Values {
 func New(db *database.DB) *master.Service[Uom, Input] {
 	return &master.Service[Uom, Input]{
 		Spec: master.Spec[Uom, Input]{
-			Menu: "pm.uom", Table: "uom", Noun: "Satuan",
+			Menu: "pm.uom", Table: "uom", Noun: "Satuan", Import: importSpec(db),
 			Base: func(x *Uom) *record.Base { return &x.Base }, Values: values, Parse: Parse,
 			SetCode: func(in *Input, c string) { in.Code = c },
 			Check: func(ctx context.Context, in *Input, stored *Uom, p record.Problems) (record.Problems, error) {

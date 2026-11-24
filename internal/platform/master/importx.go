@@ -43,10 +43,11 @@ type Import struct {
 	Describe func(cells map[string]string) string
 }
 
-// ImportUnique is a unique column: the form value Key, stored in the table column Column. With Scope (a form key, e.g.
-// parentCode) the value is unique only among records of the same scope: the file's rows are checked here, stored
-// records by the master's own check.
-type ImportUnique struct{ Key, Column, Scope string }
+// ImportUnique is a unique column: the form value Key, stored in the table column Column. With Scope (a form key
+// holding a master's code, e.g. countryCode) the value is unique only among records of the same scope: the file's rows
+// are checked here; stored records too when ScopeColumn (the reference column, e.g. country_id) and ScopeTable (the
+// referenced master, e.g. country) are set, else by the master's own check.
+type ImportUnique struct{ Key, Column, Scope, ScopeColumn, ScopeTable string }
 
 type ImportColumn struct {
 	Header   string // as in the template's header row ("*" is added when Required)
@@ -452,13 +453,17 @@ func (s *Service[T, I]) duplicate(ctx context.Context, un ImportUnique, header, 
 	if r, ok := seen[seenKey]; ok {
 		return fmt.Sprintf("%s \"%s\" sama dengan baris %d di file ini. Satukan kedua baris atau ganti salah satu.", header, value, r), nil
 	}
-	if un.Scope != "" {
+	if un.Scope != "" && un.ScopeColumn == "" {
 		seen[seenKey] = row
 		return "", nil
 	}
+	q, args := `SELECT code FROM pm.`+s.Spec.Table+` WHERE lower(btrim(`+un.Column+`)) = $1 AND NOT is_deleted AND lower(code) <> lower($2)`, []any{key, code}
+	if un.Scope != "" {
+		q += ` AND ` + un.ScopeColumn + ` = (SELECT id FROM pm.` + un.ScopeTable + ` WHERE lower(code) = lower($3) AND NOT is_deleted)`
+		args = append(args, scope)
+	}
 	var other string
-	err := s.DB.Q(ctx).QueryRow(ctx, `SELECT code FROM pm.`+s.Spec.Table+` WHERE lower(btrim(`+un.Column+`)) = $1 AND NOT is_deleted AND lower(code) <> lower($2)
-		ORDER BY code LIMIT 1`, key, code).Scan(&other)
+	err := s.DB.Q(ctx).QueryRow(ctx, q+` ORDER BY code LIMIT 1`, args...).Scan(&other)
 	noun := strings.ToLower(s.Spec.Noun)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):

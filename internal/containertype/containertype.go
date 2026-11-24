@@ -24,7 +24,8 @@ import (
 var (
 	Lengths = []int{10, 20, 40, 45, 48, 53}
 	Groups  = []string{"general", "reefer", "open_top", "flat_rack", "tank", "platform", "ventilated", "bulk", "other"}
-	isoCode = regexp.MustCompile(`^[0-9][0-9A-Z][A-Z][0-9A-Z]$`)
+	// size (length: 2 = 20', 4 = 40', L = 45', M = 48', P = 53'…; height), type, detail: 22G1, 45G1, L5G1
+	isoCode = regexp.MustCompile(`^[0-9A-Z][0-9A-Z][A-Z][0-9A-Z]$`)
 )
 
 type ContainerType struct {
@@ -72,7 +73,7 @@ func Parse(v record.Values) (Input, record.Problems) {
 		u := strings.ToUpper(*s)
 		in.IsoCode = &u
 		if !isoCode.MatchString(u) {
-			p.Add("isoCode", "Kode ISO 6346 berisi 4 karakter ukuran-tipe, mis. 22G1 atau 45G1.")
+			p.Add("isoCode", "Kode ISO 6346 berisi 4 karakter ukuran-tipe, mis. 22G1, 45G1 atau L5G1.")
 		}
 	}
 	in.LengthFt = record.RequiredInt(v, "lengthFt", "Panjang (ft)", 1, &p)
@@ -116,7 +117,7 @@ func scan(row pgx.Row) (ContainerType, error) {
 func New(db *database.DB) *master.Service[ContainerType, Input] {
 	return &master.Service[ContainerType, Input]{
 		Spec: master.Spec[ContainerType, Input]{
-			Menu: "pm.container", Table: "container_type", Noun: "Jenis kontainer",
+			Menu: "pm.container", Table: "container_type", Noun: "Jenis kontainer", Import: importSpec(db),
 			Base: func(x *ContainerType) *record.Base { return &x.Base }, Values: values, Parse: Parse,
 			SetCode: func(in *Input, c string) { in.Code = c },
 			Check: func(ctx context.Context, in *Input, stored *ContainerType, p record.Problems) (record.Problems, error) {

@@ -115,6 +115,13 @@ func TestPartnerImport(t *testing.T) {
 		}
 	})
 
+	t.Run("BP05 role labels holding a slash (Pelayaran / maskapai, Gudang / depo) read as one role each", func(t *testing.T) {
+		x := upload(t, bpBase, false, head, []any{"", "Pelayaran Uji " + sfx, "", "PT", "Vendor, Pelayaran / maskapai; Gudang / depo", "ID"})
+		if p := rowProblems(x, 0); p != "" || x.Obj["added"] != 1.0 {
+			t.Errorf("roles: %s %s", p, counts(x))
+		}
+	})
+
 	t.Run("BP04 a name already there is not added; the same name twice in the file neither", func(t *testing.T) {
 		x := upload(t, bpBase, false, head,
 			[]any{"", "consignee uji " + sfx, "", "Lainnya", "Consignee", "SG"},

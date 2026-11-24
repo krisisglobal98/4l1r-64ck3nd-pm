@@ -59,7 +59,7 @@ func values(x SalesPerson) record.Values {
 func New(db *database.DB) *master.Service[SalesPerson, Input] {
 	return &master.Service[SalesPerson, Input]{
 		Spec: master.Spec[SalesPerson, Input]{
-			Menu: "pm.salesPerson", Table: "sales_person", Noun: "Tenaga penjualan",
+			Menu: "pm.salesPerson", Table: "sales_person", Noun: "Tenaga penjualan", Import: importSpec(db),
 			Base: func(x *SalesPerson) *record.Base { return &x.Base }, Values: values, Parse: Parse,
 			SetCode: func(in *Input, c string) { in.Code = c },
 			Check: func(ctx context.Context, in *Input, stored *SalesPerson, p record.Problems) (record.Problems, error) {
@@ -75,6 +75,13 @@ func check(ctx context.Context, db *database.DB, in *Input, stored *SalesPerson,
 	var keptEmp, keptUnit *string
 	if stored != nil {
 		self, keptEmp, keptUnit = stored.ID, &stored.EmployeeID, stored.UnitID
+	}
+	// An inactive sales person may point to an inactive employee (the history of one who left, e.g. migrated); an
+	// active one needs an active employee.
+	if !in.Active && in.EmployeeCode != "" {
+		if r, err := refs.Lookup(ctx, db, "employee", in.EmployeeCode); err == nil {
+			keptEmp = &r.ID
+		}
 	}
 	emp, err := refs.Pick(ctx, db, "employee", "employeeCode", "Karyawan", nonEmpty(in.EmployeeCode), keptEmp, &p)
 	if err != nil {
