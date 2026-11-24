@@ -80,7 +80,7 @@ func opt(s *string) any {
 func New(db *database.DB) *master.Service[Country, Input] {
 	return &master.Service[Country, Input]{
 		Spec: master.Spec[Country, Input]{
-			Menu: "pm.country", Table: "country", Noun: "Negara",
+			Menu: "pm.country", Table: "country", Noun: "Negara", Global: true,
 			Base: func(x *Country) *record.Base { return &x.Base }, Values: values, Parse: Parse,
 			SetCode: func(in *Input, c string) { in.Code = c },
 			Check: func(ctx context.Context, in *Input, stored *Country, p record.Problems) (record.Problems, error) {
@@ -111,7 +111,7 @@ func New(db *database.DB) *master.Service[Country, Input] {
 				return p, err
 			},
 		},
-		Repo: repo{db}, DB: db, Codes: codeprefix.Postgres{DB: db}, Events: outbox.Writer{DB: db},
+		Repo: repo{db}, DB: db, Codes: codeprefix.Global{DB: db, Prefix: "MNG", Digits: 3}, Events: outbox.Writer{DB: db},
 	}
 }
 

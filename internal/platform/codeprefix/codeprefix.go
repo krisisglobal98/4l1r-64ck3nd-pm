@@ -72,3 +72,24 @@ func NextFree(ctx context.Context, gen Generator, master string, taken func(ctx 
 	}
 	return "", apperr.Conflict("CODE_EXHAUSTED", "Kode otomatis berikutnya sudah dipakai. Periksa nomor terakhir di Prefix Kode Master.")
 }
+
+// Global numbers the records of a global master (one set for every tenant, so no tenant's pm.code_prefix row
+// applies): its fixed prefix + one past the highest number in use. The table's transaction lock makes two saves
+// take one number after the other.
+type Global struct {
+	DB     *database.DB
+	Prefix string
+	Digits int
+}
+
+func (g Global) Next(ctx context.Context, master string) (string, error) {
+	if _, err := g.DB.Q(ctx).Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('pm.global.' || $1))`, master); err != nil {
+		return "", err
+	}
+	var n int64
+	if err := g.DB.Q(ctx).QueryRow(ctx, `SELECT coalesce(max(substring(code FROM $2::int + 1)::bigint), 0) + 1 FROM pm.`+master+
+		` WHERE code ~ ('^' || $1 || '[0-9]+$')`, g.Prefix, len(g.Prefix)).Scan(&n); err != nil {
+		return "", err
+	}
+	return Format(g.Prefix, g.Digits, n), nil
+}

@@ -56,6 +56,24 @@ type Spec[T, I any] struct {
 	Serialize bool
 	// Import fills the master from an Excel workbook (template + upload). Optional: without it the upload is refused.
 	Import *Import
+	// Global: one set of records for every company (a standard reference: countries, currencies, Incoterms), not a
+	// row per tenant. Every company reads it; only the installation's administrator (platform) adds or changes a
+	// record, and none is deleted (deactivate instead: any company may use it, which no one company can see).
+	Global bool
+}
+
+// errGlobalWrite / errGlobalDelete refuse changes to a global master.
+var (
+	errGlobalWrite  = &apperr.Error{Status: http.StatusForbidden, Code: "GLOBAL_MASTER", Message: "Data referensi global (dipakai semua perusahaan) hanya dapat diubah admin platform."}
+	errGlobalDelete = apperr.Conflict("GLOBAL_MASTER", "Data referensi global tidak dapat dihapus karena dapat dipakai perusahaan mana pun; nonaktifkan saja.")
+)
+
+// writable checks a create or change of a global master is the platform administrator's.
+func (s *Service[T, I]) writable(u access.User) error {
+	if s.Spec.Global && !u.Platform {
+		return errGlobalWrite
+	}
+	return nil
 }
 
 type Service[T, I any] struct {
@@ -91,6 +109,9 @@ func (s *Service[T, I]) Create(ctx context.Context, body record.Values) (T, erro
 	if err != nil {
 		return saved, err
 	}
+	if err := s.writable(u); err != nil {
+		return saved, err
+	}
 	err = s.DB.InTx(ctx, func(ctx context.Context) error {
 		if err := s.serialize(ctx); err != nil {
 			return err
@@ -122,6 +143,9 @@ func (s *Service[T, I]) Update(ctx context.Context, code string, body record.Val
 	var saved T
 	u, err := access.Require(ctx, s.Spec.Menu, "update")
 	if err != nil {
+		return saved, err
+	}
+	if err := s.writable(u); err != nil {
 		return saved, err
 	}
 	if !record.LookupKey(code) {
@@ -166,6 +190,9 @@ func (s *Service[T, I]) Delete(ctx context.Context, code string) error {
 	u, err := access.Require(ctx, s.Spec.Menu, "delete")
 	if err != nil {
 		return err
+	}
+	if s.Spec.Global {
+		return errGlobalDelete
 	}
 	if !record.LookupKey(code) {
 		return apperr.NotFound()

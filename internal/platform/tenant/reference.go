@@ -2,15 +2,14 @@ package tenant
 
 import (
 	"context"
-	"slices"
 
 	"alir.local/pm-service/internal/platform/codeprefix"
 	"alir.local/pm-service/internal/platform/database"
 )
 
-// The standard reference data a tenant starts with: the currencies (ISO 4217, with their minor units) most used in
-// Indonesian trade, and every country of ISO 3166-1 (countries.go). A tenant may then deactivate, change or add its
-// own; a row the tenant deleted does not come back.
+// The standard reference data, global (one set for every tenant, kept by the platform administrator): the currencies
+// (ISO 4217, with their minor units) most used in Indonesian trade, every country of ISO 3166-1 (countries.go), and
+// the Incoterms 2020.
 
 type currencyRef struct {
 	iso, name, symbol string
@@ -36,59 +35,82 @@ type countryRef struct {
 	iso2, iso3, phone, name, currency string
 }
 
-// seedReference adds the standard currencies and countries to a tenant whose tables are still empty (deleted rows
-// count: what the tenant removed stays removed). ctx carries the tenant's connection.
-func seedReference(ctx context.Context, db *database.DB) error {
-	codes := codeprefix.Postgres{DB: db}
-	empty := func(table string) (bool, error) {
-		var any bool
-		err := db.Q(ctx).QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pm.`+table+`)`).Scan(&any)
-		return !any, err
-	}
-	if ok, err := empty("currency"); err != nil {
+// seedGlobal makes sure the global reference masters hold the standard rows: the currencies, every country of ISO
+// 3166-1 and the Incoterms 2020. They are one set for all tenants; a row is added only when no row (live or deleted)
+// has its ISO code / term, so what the platform administrator removed or changed stays so. Idempotent and cheap: it
+// runs as a tenant is prepared, one at a time (a global lock).
+func seedGlobal(ctx context.Context, db *database.DB) error {
+	if _, err := db.Q(ctx).Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('pm.global.seed'))`); err != nil {
 		return err
-	} else if ok {
-		for _, c := range Currencies {
-			code, err := codes.Next(ctx, "currency")
-			if err != nil {
-				return err
-			}
-			if _, err := db.Q(ctx).Exec(ctx, `INSERT INTO pm.currency (code, name, iso_code, symbol, decimals, created_by) VALUES ($1, $2, $3, $4, $5, $6)`,
-				code, c.name, c.iso, c.symbol, c.decimals, systemUser); err != nil {
-				return err
-			}
-		}
 	}
-	// Countries: every standard one the tenant has never had a row for (deleted rows count), so a tenant made before
-	// the list was complete gets the rest, and a country it removed stays removed.
-	var have []string
-	rows, err := db.Q(ctx).Query(ctx, `SELECT upper(iso2) FROM pm.country`)
+	have := func(sql string) (map[string]bool, error) {
+		rows, err := db.Q(ctx).Query(ctx, sql)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		out := map[string]bool{}
+		for rows.Next() {
+			var k string
+			if err := rows.Scan(&k); err != nil {
+				return nil, err
+			}
+			out[k] = true
+		}
+		return out, rows.Err()
+	}
+	cur, err := have(`SELECT upper(iso_code) FROM pm.currency`)
 	if err != nil {
 		return err
 	}
-	for rows.Next() {
-		var iso string
-		if err := rows.Scan(&iso); err != nil {
-			rows.Close()
-			return err
-		}
-		have = append(have, iso)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	for _, c := range Countries {
-		if slices.Contains(have, c.iso2) {
+	curCodes := codeprefix.Global{DB: db, Prefix: "MMU", Digits: 3}
+	for _, c := range Currencies {
+		if cur[c.iso] {
 			continue
 		}
-		code, err := codes.Next(ctx, "country")
+		code, err := curCodes.Next(ctx, "currency")
+		if err != nil {
+			return err
+		}
+		if _, err := db.Q(ctx).Exec(ctx, `INSERT INTO pm.currency (code, name, iso_code, symbol, decimals, created_by) VALUES ($1, $2, $3, $4, $5, $6)`,
+			code, c.name, c.iso, c.symbol, c.decimals, systemUser); err != nil {
+			return err
+		}
+	}
+	cty, err := have(`SELECT upper(iso2) FROM pm.country`)
+	if err != nil {
+		return err
+	}
+	ctyCodes := codeprefix.Global{DB: db, Prefix: "MNG", Digits: 3}
+	for _, c := range Countries {
+		if cty[c.iso2] {
+			continue
+		}
+		code, err := ctyCodes.Next(ctx, "country")
 		if err != nil {
 			return err
 		}
 		if _, err := db.Q(ctx).Exec(ctx, `INSERT INTO pm.country (code, name, iso2, iso3, phone_code, currency_id, created_by)
 			VALUES ($1, $2, $3, $4, $5, (SELECT id FROM pm.currency WHERE iso_code = nullif($6, '') AND NOT is_deleted), $7)`,
 			code, c.name, c.iso2, c.iso3, c.phone, c.currency, systemUser); err != nil {
+			return err
+		}
+	}
+	inc, err := have(`SELECT term FROM pm.incoterm WHERE edition = 2020`)
+	if err != nil {
+		return err
+	}
+	incCodes := codeprefix.Global{DB: db, Prefix: "MIC", Digits: 3}
+	for _, x := range Incoterms {
+		if inc[x.Term] {
+			continue
+		}
+		code, err := incCodes.Next(ctx, "incoterm")
+		if err != nil {
+			return err
+		}
+		if _, err := db.Q(ctx).Exec(ctx, `INSERT INTO pm.incoterm (code, name, term, edition, any_mode, seller_pays_carriage, seller_insures, seller_clears_import, risk_point, created_by)
+			VALUES ($1, $2, $3, 2020, $4, $5, $6, $7, $8, $9)`, code, x.Name, x.Term, x.AnyMode, x.Carriage, x.Insures, x.Clear, x.Risk, systemUser); err != nil {
 			return err
 		}
 	}
@@ -174,13 +196,6 @@ func seedLogistics(ctx context.Context, db *database.DB) error {
 	}
 	exec := func(sql string, args ...any) error {
 		_, err := db.Q(ctx).Exec(ctx, sql, args...)
-		return err
-	}
-	if err := seed("incoterm", len(Incoterms), func(i int, code string) error {
-		x := Incoterms[i]
-		return exec(`INSERT INTO pm.incoterm (code, name, term, edition, any_mode, seller_pays_carriage, seller_insures, seller_clears_import, risk_point, created_by)
-			VALUES ($1, $2, $3, 2020, $4, $5, $6, $7, $8, $9)`, code, x.Name, x.Term, x.AnyMode, x.Carriage, x.Insures, x.Clear, x.Risk, systemUser)
-	}); err != nil {
 		return err
 	}
 	if err := seed("container_type", len(ContainerTypes), func(i int, code string) error {

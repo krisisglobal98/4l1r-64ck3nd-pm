@@ -203,17 +203,17 @@ func TestReferenceNegative(t *testing.T) {
 		}
 	})
 
-	t.Run("RN06 a currency or country still used is not deleted", func(t *testing.T) {
-		cur := must(t, call(t, "POST", curBase, map[string]any{"name": "Mata Uang Dipakai", "isoCode": "XTC"}), 201)
-		n := refSeq.Add(1)
-		must(t, call(t, "POST", ctyBase, map[string]any{"name": "Negara Dipakai", "iso2": "Y" + letters(n, 1), "currencyCode": cur.str("code")}), 201)
-		if r := call(t, "DELETE", curBase+"/"+cur.str("code"), nil); r.Status != 409 || !strings.Contains(r.str("message"), "negara") {
-			t.Errorf("currency in use: %d %s", r.Status, r.Raw)
+	t.Run("RN06 a currency or country is global: never deleted (deactivated instead)", func(t *testing.T) {
+		cur := must(t, call(t, "POST", curBase, map[string]any{"name": "Mata Uang Global", "isoCode": "XTC"}), 201)
+		if r := call(t, "DELETE", curBase+"/"+cur.str("code"), nil); r.Status != 409 || !strings.Contains(r.str("message"), "nonaktifkan") {
+			t.Errorf("currency delete: %d %s", r.Status, r.Raw)
 		}
 		c := testCountry(t)
-		must(t, call(t, "POST", cityBase, map[string]any{"name": "Kota Pemakai", "countryCode": c["code"]}), 201)
-		if r := call(t, "DELETE", ctyBase+"/"+c["code"].(string), nil); r.Status != 409 || !strings.Contains(r.str("message"), "kota") {
-			t.Errorf("country in use: %d %s", r.Status, r.Raw)
+		if r := call(t, "DELETE", ctyBase+"/"+c["code"].(string), nil); r.Status != 409 || !strings.Contains(r.str("message"), "global") {
+			t.Errorf("country delete: %d %s", r.Status, r.Raw)
+		}
+		if u := must(t, call(t, "PUT", curBase+"/"+cur.str("code"), map[string]any{"active": false}), 200); u.Obj["active"] != false {
+			t.Errorf("deactivate %s", trunc(u.Raw))
 		}
 	})
 
@@ -232,15 +232,23 @@ func TestReferenceNegative(t *testing.T) {
 		}
 	})
 
-	t.Run("RN08 another company has its own standard rows and never sees this company's", func(t *testing.T) {
-		mine := must(t, call(t, "POST", curBase, map[string]any{"name": "Mata Uang Rahasia", "isoCode": "XTD"}), 201)
+	t.Run("RN08 global: every company reads the same rows; an ISO code is one for all companies", func(t *testing.T) {
+		mine := must(t, call(t, "POST", curBase, map[string]any{"name": "Mata Uang Bersama", "isoCode": "XTD"}), 201)
 		other := must(t, call(t, "GET", curBase, nil, as(tenantB)...), 200).List
-		if byKey(other, "isoCode", "IDR") == nil || byKey(other, "isoCode", "XTD") != nil {
-			t.Errorf("tenant B currencies: idr %v, A's own %v", byKey(other, "isoCode", "IDR") != nil, byKey(other, "isoCode", "XTD"))
+		if x := byKey(other, "isoCode", "XTD"); x == nil || x["code"] != mine.str("code") {
+			t.Errorf("tenant B sees the global row: %v", x)
 		}
-		// The same ISO code is free in another company.
-		must(t, call(t, "POST", curBase, map[string]any{"name": "Mata Uang B", "isoCode": "XTD"}, as(tenantB)...), 201)
-		_ = mine
+		if a, b := len(must(t, call(t, "GET", ctyBase, nil), 200).List), len(must(t, call(t, "GET", ctyBase, nil, as(tenantB)...), 200).List); a != b || a < 249 {
+			t.Errorf("countries: A %d, B %d", a, b)
+		}
+		if x := call(t, "POST", curBase, map[string]any{"name": "Mata Uang B", "isoCode": "XTD"}, as(tenantB)...); !want(t, x, 422) || x.problem("isoCode") == "" {
+			t.Errorf("ISO code taken for all: %s", trunc(x.Raw))
+		}
+		// A company's own record points to the global row.
+		id := byKey(must(t, call(t, "GET", ctyBase, nil, as(tenantB)...), 200).List, "iso2", "ID")
+		if bk := must(t, call(t, "POST", bkBase, map[string]any{"name": "Bank Tenant B", "countryCode": id["code"]}, as(tenantB)...), 201); bk.str("countryCode") != id["code"] {
+			t.Errorf("bank of B %s", trunc(bk.Raw))
+		}
 	})
 }
 

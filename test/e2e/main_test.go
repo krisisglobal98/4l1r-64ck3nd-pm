@@ -94,11 +94,13 @@ func reset() {
 		// Reference masters: the standard rows of the migrated tenant stay (as seeded), everything else goes.
 		`DELETE FROM pm.commodity`, `DELETE FROM pm.location`,
 		`DELETE FROM pm.city`, `DELETE FROM pm.payment_term`, `DELETE FROM pm.tax_type`,
-		`DELETE FROM pm.country WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
-		`DELETE FROM pm.currency WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
+		// Global reference masters: the standard rows (seeded by the system) stay, the ones a test added go.
+		`UPDATE pm.country SET currency_id = NULL WHERE currency_id IN (SELECT id FROM pm.currency WHERE created_by <> '` + systemID + `')`,
+		`DELETE FROM pm.country WHERE created_by <> '` + systemID + `'`,
+		`DELETE FROM pm.currency WHERE created_by <> '` + systemID + `'`,
 		`UPDATE pm.country SET is_active = true, is_deleted = false, deleted_at = NULL, deleted_by = NULL, updated_at = NULL, updated_by = NULL, version = 1`,
 		// Logistics reference rows: the seeded ones of the migrated tenant stay, everything else goes.
-		`DELETE FROM pm.incoterm WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
+		`DELETE FROM pm.incoterm WHERE created_by <> '` + systemID + `'`,
 		`DELETE FROM pm.container_type WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
 		`DELETE FROM pm.packaging WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
 		`DELETE FROM pm.uom WHERE tenant_id <> '` + tenantA + `' OR created_by <> '` + systemID + `'`,
@@ -131,9 +133,6 @@ func reset() {
 		`DELETE FROM pm.code_prefix WHERE tenant_id <> '` + tenantA + `'`,
 		`UPDATE pm.code_prefix SET last_number = 0, is_active = true WHERE code IN ('org_level', 'unit_type', 'org_unit', 'grade', 'jabatan', 'position', 'approval_rule', 'delegation', 'custom_flow', 'employment_status', 'education_level', 'work_shift', 'bank', 'employee', 'city', 'payment_term', 'tax_type', 'business_partner', 'sales_person', 'location', 'commodity', 'exchange_rate', 'charge_code', 'company_bank_account')`,
 		// The seeded currencies and countries keep their numbers: the counter continues after them.
-		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.currency c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'currency'`,
-		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.country c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'country'`,
-		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.incoterm c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'incoterm'`,
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.container_type c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'container_type'`,
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.packaging c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'packaging'`,
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.uom c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'uom'`,

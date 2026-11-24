@@ -19,6 +19,9 @@ type User struct {
 	// Grants by menu (e.g. "pm.orgLevel" → read, create, …); ignored when Full.
 	Grants map[string][]string
 	Full   bool
+	// Platform: the installation's administrator, who alone changes the global reference masters (countries,
+	// currencies, Incoterms) that every company reads.
+	Platform bool
 }
 
 type ctxKey struct{}
@@ -63,7 +66,7 @@ func Require(ctx context.Context, menu, action string) (User, error) {
 func DefaultUser(id, username, tenantID string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			u := User{ID: id, Username: username, Full: true, TenantID: tenantID}
+			u := User{ID: id, Username: username, Full: true, TenantID: tenantID, Platform: true}
 			if h := r.Header.Get("X-Tenant-ID"); uuidLike(h) {
 				u.TenantID = h
 			}

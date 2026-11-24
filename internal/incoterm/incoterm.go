@@ -75,7 +75,7 @@ func values(x Incoterm) record.Values {
 func New(db *database.DB) *master.Service[Incoterm, Input] {
 	return &master.Service[Incoterm, Input]{
 		Spec: master.Spec[Incoterm, Input]{
-			Menu: "pm.incoterm", Table: "incoterm", Noun: "Incoterm",
+			Menu: "pm.incoterm", Table: "incoterm", Noun: "Incoterm", Global: true,
 			Base: func(x *Incoterm) *record.Base { return &x.Base }, Values: values, Parse: Parse,
 			SetCode: func(in *Input, c string) { in.Code = c },
 			Check: func(ctx context.Context, in *Input, stored *Incoterm, p record.Problems) (record.Problems, error) {
@@ -108,6 +108,6 @@ func New(db *database.DB) *master.Service[Incoterm, Input] {
 				return []any{in.Term, in.Edition, in.AnyMode, in.SellerPaysCarriage, in.SellerInsures, in.SellerClears, in.RiskPoint}
 			},
 			Order: "edition DESC, code"},
-		DB: db, Codes: codeprefix.Postgres{DB: db}, Events: outbox.Writer{DB: db},
+		DB: db, Codes: codeprefix.Global{DB: db, Prefix: "MIC", Digits: 3}, Events: outbox.Writer{DB: db},
 	}
 }

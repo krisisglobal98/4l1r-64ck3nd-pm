@@ -37,6 +37,7 @@ type claims struct {
 	Username string              `json:"username"`
 	Full     bool                `json:"full"`
 	Grants   map[string][]string `json:"grants"`
+	Platform bool                `json:"pa"` // administers the installation (the global reference masters)
 }
 
 var b64 = base64.RawURLEncoding
@@ -149,7 +150,7 @@ func (j *JWT) Middleware(next http.Handler) http.Handler {
 			httpx.WriteError(w, r, &apperr.Error{Status: http.StatusUnauthorized, Code: "TOKEN_INVALID", Message: "Sesi tidak sah. Silakan masuk kembali."})
 			return
 		}
-		u := User{ID: c.Sub, TenantID: c.Tid, Username: c.Username, Grants: c.Grants, Full: c.Full}
+		u := User{ID: c.Sub, TenantID: c.Tid, Username: c.Username, Grants: c.Grants, Full: c.Full, Platform: c.Platform}
 		next.ServeHTTP(w, r.WithContext(WithUser(r.Context(), u)))
 	})
 }

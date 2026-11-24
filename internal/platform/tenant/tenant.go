@@ -37,10 +37,10 @@ var Prefixes = []struct {
 	{"approval_rule", "Aturan Approval", "MAR", 3}, {"delegation", "Delegasi", "MDL", 3}, {"custom_flow", "Approval Custom", "MAC", 3},
 	{"employment_status", "Status Kepegawaian", "MSK", 3}, {"education_level", "Jenjang Pendidikan", "MJP", 3},
 	{"work_shift", "Shift Kerja", "MSF", 3}, {"bank", "Bank", "MBK", 3}, {"employee", "Karyawan", "MKY", 4},
-	{"currency", "Mata Uang", "MMU", 3}, {"country", "Negara", "MNG", 3}, {"city", "Kota", "MKT", 3},
+	{"city", "Kota", "MKT", 3},
 	{"payment_term", "Syarat Pembayaran", "MTP", 3}, {"tax_type", "Jenis Pajak", "MPJ", 3},
 	{"business_partner", "Mitra Bisnis", "MMB", 4}, {"sales_person", "Tenaga Penjualan", "MTJ", 3},
-	{"location", "Pelabuhan & Lokasi", "MLK", 3}, {"incoterm", "Incoterms", "MIC", 3}, {"container_type", "Jenis Kontainer", "MKN", 3},
+	{"location", "Pelabuhan & Lokasi", "MLK", 3}, {"container_type", "Jenis Kontainer", "MKN", 3},
 	{"packaging", "Kemasan", "MKM", 3}, {"uom", "Satuan", "MST", 3}, {"commodity", "Komoditas", "MKD", 3},
 	{"exchange_rate", "Kurs", "MKR", 6}, {"charge_code", "Kode Biaya", "MKB", 3}, {"company_bank_account", "Rekening Bank Perusahaan", "MRP", 3},
 	{"document_type", "Jenis Dokumen", "MJD", 3}, {"service_type", "Moda & Layanan", "MML", 3},
@@ -75,7 +75,7 @@ func (p *Provisioner) Ensure(ctx context.Context, tid string) error {
 				return err
 			}
 		}
-		if err := seedReference(ctx, p.DB); err != nil {
+		if err := seedGlobal(ctx, p.DB); err != nil {
 			return err
 		}
 		if err := seedLogistics(ctx, p.DB); err != nil {

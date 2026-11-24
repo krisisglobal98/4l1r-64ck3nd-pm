@@ -173,9 +173,11 @@ the JSON (see `migrations/000001_org_level.up.sql` and `internal/platform/record
   position's holder and Plt and a delegation's delegate are employees (Plt never the holder; a delegate never the
   holder of the position). Shift times are wall-clock HH:MM; a shift ending the next day is a night shift.
 - **Reference masters:** ISO codes (`isoCode` ISO 4217; `iso2`/`iso3` ISO 3166) are separate unique columns; the
-  business `code` is still generated (MMU, MNG, MKT, MTP, MPJ). A new tenant gets 36 currencies (seeded while the table
-  is empty) and all 249 countries of ISO 3166-1; an existing tenant gets each standard country it never had a row
-  for (one it deleted stays deleted). Bank adds `swiftCode` (BIC 8 or 11) and `countryCode`. Syarat
+  business `code` is still generated (MMU, MNG, MKT, MTP, MPJ). Negara, Mata Uang and Incoterms are **global** (migration
+  000020): one set for every tenant, outside Row-Level Security (`Spec.Global`); every company reads them, only the
+  platform administrator (token claim `pa`) adds or changes a record, none is deleted (deactivate instead), codes come
+  from `codeprefix.Global`. The standard rows (36 currencies, 249 countries of ISO 3166-1, Incoterms 2020) are ensured
+  once, globally (`seedGlobal`). Bank adds `swiftCode` (BIC 8 or 11) and `countryCode`. Syarat
   Pembayaran: `days` 0–365 from a `basis` (invoice/receipt/BL date, ETD, ETA, end of month, delivery), optional down
   payment. Jenis Pajak: `ratePct` on `basePct` of the base gives `effectivePct`; PPN/PPnBM are added, PPh withheld.
 - **Mitra Bisnis:** one record per legal party with its `roles` (customer, vendor, shipper, consignee, notify_party,
