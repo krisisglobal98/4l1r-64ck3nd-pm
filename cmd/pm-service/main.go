@@ -13,11 +13,12 @@ import (
 
 	"alir.local/pm-service/internal/approvalrule"
 	"alir.local/pm-service/internal/bank"
+	"alir.local/pm-service/internal/building"
 	"alir.local/pm-service/internal/chargecode"
 	"alir.local/pm-service/internal/city"
+	"alir.local/pm-service/internal/coa"
 	"alir.local/pm-service/internal/commodity"
 	"alir.local/pm-service/internal/companyaccount"
-	"alir.local/pm-service/internal/coa"
 	"alir.local/pm-service/internal/companyprofile"
 	"alir.local/pm-service/internal/containertype"
 	"alir.local/pm-service/internal/country"
@@ -33,6 +34,7 @@ import (
 	"alir.local/pm-service/internal/incoterm"
 	"alir.local/pm-service/internal/jabatan"
 	"alir.local/pm-service/internal/location"
+	"alir.local/pm-service/internal/meetingroom"
 	"alir.local/pm-service/internal/numbering"
 	"alir.local/pm-service/internal/orglevel"
 	"alir.local/pm-service/internal/orgunit"
@@ -49,6 +51,7 @@ import (
 	"alir.local/pm-service/internal/platform/outbox"
 	"alir.local/pm-service/internal/platform/tenant"
 	"alir.local/pm-service/internal/position"
+	"alir.local/pm-service/internal/roomamenity"
 	"alir.local/pm-service/internal/salesperson"
 	"alir.local/pm-service/internal/servicetype"
 	"alir.local/pm-service/internal/sysparam"
@@ -128,6 +131,10 @@ func run() error {
 	master.Routes(mux, "/pm/masters/business-partners", partner.New(db))
 	// Logistik & Pengiriman, and the ports of Geografi & Lokasi
 	master.Routes(mux, "/pm/masters/ports", location.New(db))
+	// Meeting Room: buildings (Geografi & Lokasi), amenities and rooms; bookings live in ALIR_MR_SERVICE.
+	master.Routes(mux, "/pm/masters/buildings", building.New(db))
+	master.Routes(mux, "/pm/masters/room-amenities", roomamenity.New(db))
+	master.Routes(mux, "/pm/masters/meeting-rooms", meetingroom.New(db))
 	master.Routes(mux, "/pm/masters/incoterms", incoterm.New(db))
 	master.Routes(mux, "/pm/masters/containers", containertype.New(db))
 	master.Routes(mux, "/pm/masters/packagings", packaging.New(db))

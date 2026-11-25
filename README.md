@@ -7,7 +7,10 @@ Custom (Alur approval); and Karyawan with the Employee Management masters it use
 Pendidikan, Shift Kerja); and the global reference masters: **Keuangan & Pajak** (Mata Uang, Bank, Syarat
 Pembayaran, Jenis Pajak), **Geografi & Lokasi** (Negara, Kota) **Mitra Bisnis** (Mitra Bisnis, Tenaga Penjualan) and **Logistik & Pengiriman** (Incoterms, Jenis Kontainer, Kemasan,
 Satuan, Komoditas, Moda & Layanan) with Pelabuhan & Lokasi; Kurs, Kode Biaya and Rekening Bank Perusahaan
-(Keuangan & Pajak); and **Dokumen** (Jenis Dokumen).
+(Keuangan & Pajak); and **Dokumen** (Jenis Dokumen); for the Meeting Room module (bookings in `../ALIR_MR_SERVICE`) Gedung & Kantor
+(Geografi & Lokasi, `/pm/masters/buildings`, with the IANA zone of the building's clock), Fasilitas Ruang
+(`/pm/masters/room-amenities`) and Ruang Rapat (`/pm/masters/meeting-rooms`: seats, floor, opening hours, longest booking,
+approval, weekends, person in charge, amenities), and the number pattern `MR.BOOK`.
 The other masters still come from the frontend's sample data until they move here.
 
 ```bash

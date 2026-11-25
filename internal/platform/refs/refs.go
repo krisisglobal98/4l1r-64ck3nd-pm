@@ -69,6 +69,7 @@ var usage = map[string][]user{
 		{"approval custom", `SELECT count(*) FROM pm.custom_flow WHERE scope_unit_id = $1 AND NOT is_deleted`},
 		{"tenaga penjualan", `SELECT count(*) FROM pm.sales_person WHERE org_unit_id = $1 AND NOT is_deleted`},
 		{"rekening perusahaan", `SELECT count(*) FROM pm.company_bank_account WHERE org_unit_id = $1 AND NOT is_deleted`},
+		{"gedung", `SELECT count(*) FROM pm.building WHERE org_unit_id = $1 AND NOT is_deleted`},
 	},
 	"grade": {
 		{"jabatan", `SELECT count(*) FROM pm.jabatan WHERE grade_id = $1 AND NOT is_deleted`},
@@ -109,7 +110,10 @@ var usage = map[string][]user{
 	"city": {
 		{"alamat mitra bisnis", `SELECT count(DISTINCT x.id) FROM pm.business_partner x JOIN pm.business_partner_address a ON a.business_partner_id = x.id WHERE a.city_id = $1 AND NOT x.is_deleted`},
 		{"lokasi", `SELECT count(*) FROM pm.location WHERE city_id = $1 AND NOT is_deleted`},
+		{"gedung", `SELECT count(*) FROM pm.building WHERE city_id = $1 AND NOT is_deleted`},
 	},
+	"building":     {{"ruang rapat", `SELECT count(*) FROM pm.meeting_room WHERE building_id = $1 AND NOT is_deleted`}},
+	"room_amenity": {{"ruang rapat", `SELECT count(DISTINCT x.id) FROM pm.meeting_room x JOIN pm.meeting_room_amenity a ON a.meeting_room_id = x.id WHERE a.room_amenity_id = $1 AND NOT x.is_deleted`}},
 	"payment_term": {{"mitra bisnis", `SELECT count(*) FROM pm.business_partner WHERE (customer_payment_term_id = $1 OR vendor_payment_term_id = $1) AND NOT is_deleted`}},
 	"tax_type": {
 		{"mitra bisnis", `SELECT count(*) FROM pm.business_partner WHERE vendor_tax_type_id = $1 AND NOT is_deleted`},
@@ -124,6 +128,7 @@ var usage = map[string][]user{
 		{"posisi (Plt)", `SELECT count(*) FROM pm.position WHERE acting_employee_id = $1 AND NOT is_deleted`},
 		{"delegasi", `SELECT count(*) FROM pm.delegation WHERE delegate_employee_id = $1 AND NOT is_deleted`},
 		{"tenaga penjualan", `SELECT count(*) FROM pm.sales_person WHERE employee_id = $1 AND NOT is_deleted`},
+		{"ruang rapat (penanggung jawab)", `SELECT count(*) FROM pm.meeting_room WHERE pic_employee_id = $1 AND NOT is_deleted`},
 	},
 	"approval_rule": {
 		{"delegasi", `SELECT count(*) FROM pm.delegation d JOIN pm.delegation_rule x ON x.delegation_id = d.id

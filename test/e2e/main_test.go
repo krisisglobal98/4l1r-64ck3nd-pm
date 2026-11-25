@@ -90,6 +90,7 @@ func reset() {
 		`DELETE FROM pm.exchange_rate`, `DELETE FROM pm.charge_code_rate`, `DELETE FROM pm.charge_code`, `DELETE FROM pm.company_bank_account`, `DELETE FROM pm.company_profile`, `DELETE FROM pm.system_parameter`, `UPDATE pm.account SET parent_id = NULL`, `DELETE FROM pm.account`,
 		`DELETE FROM pm.business_partner_address`, `DELETE FROM pm.business_partner_contact`, `DELETE FROM pm.business_partner_bank_account`,
 		`DELETE FROM pm.business_partner`, `DELETE FROM pm.sales_person`,
+		`DELETE FROM pm.meeting_room_amenity`, `DELETE FROM pm.meeting_room`, `DELETE FROM pm.room_amenity`, `DELETE FROM pm.building`,
 		`DELETE FROM pm.employee`, `DELETE FROM pm.employment_status`, `DELETE FROM pm.education_level`, `DELETE FROM pm.work_shift`, `DELETE FROM pm.bank`,
 		// Reference masters: the standard rows of the migrated tenant stay (as seeded), everything else goes.
 		`DELETE FROM pm.commodity`, `DELETE FROM pm.location`,
@@ -131,7 +132,7 @@ func reset() {
 		// Tenants other than the migrated one (the isolation suite) leave nothing behind.
 		`DELETE FROM pm.org_level WHERE tenant_id <> '` + tenantA + `'`, `DELETE FROM pm.unit_type WHERE tenant_id <> '` + tenantA + `'`,
 		`DELETE FROM pm.code_prefix WHERE tenant_id <> '` + tenantA + `'`,
-		`UPDATE pm.code_prefix SET last_number = 0, is_active = true WHERE code IN ('org_level', 'unit_type', 'org_unit', 'grade', 'jabatan', 'position', 'approval_rule', 'delegation', 'custom_flow', 'employment_status', 'education_level', 'work_shift', 'bank', 'employee', 'city', 'payment_term', 'tax_type', 'business_partner', 'sales_person', 'location', 'commodity', 'exchange_rate', 'charge_code', 'company_bank_account')`,
+		`UPDATE pm.code_prefix SET last_number = 0, is_active = true WHERE code IN ('org_level', 'unit_type', 'org_unit', 'grade', 'jabatan', 'position', 'approval_rule', 'delegation', 'custom_flow', 'employment_status', 'education_level', 'work_shift', 'bank', 'employee', 'city', 'payment_term', 'tax_type', 'business_partner', 'sales_person', 'location', 'commodity', 'exchange_rate', 'charge_code', 'company_bank_account', 'building', 'room_amenity', 'meeting_room')`,
 		// The seeded currencies and countries keep their numbers: the counter continues after them.
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.container_type c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'container_type'`,
 		`UPDATE pm.code_prefix p SET last_number = (SELECT count(*) FROM pm.packaging c WHERE c.tenant_id = p.tenant_id), is_active = true WHERE code = 'packaging'`,
